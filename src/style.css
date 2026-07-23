@@ -45,6 +45,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 420px; min-height: c
 .summary-text { margin: 9px 0 0; color: #526a66; font-size: .82rem; }
 
 .category-actions { display: flex; gap: 8px; margin-bottom: 9px; }
+.category-mode { margin-bottom: 11px; }
 .category-actions button { border: 0; color: #075b57; background: none; padding: 3px; font-size: .78rem; text-decoration: underline; }
 .category-list { max-height: 345px; overflow: auto; border: 1px solid #d9e3df; border-radius: 8px; }
 .category-list details + details { border-top: 1px solid #e0e7e4; }
@@ -57,6 +58,14 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 420px; min-height: c
 details[open] .chevron { transform: rotate(180deg); }
 .subcategory-list { display: grid; gap: 1px; padding: 5px 10px 10px 31px; }
 .subcategory-list label { display: flex; align-items: flex-start; gap: 8px; padding: 6px 3px; font-size: .82rem; }
+.all-category-list { min-height: 160px; }
+.all-category-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #edf1ef; font-size: .8rem; }
+.all-category-item:last-child { border-bottom: 0; }
+.all-category-item span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.all-category-item strong { font-weight: 650; }
+.all-category-item small { overflow-wrap: anywhere; color: #71827f; font-size: .66rem; }
+.category-note, .empty-result { margin: 8px 0 0; color: #71827f; font-size: .7rem; line-height: 1.45; }
+.empty-result { padding: 14px; }
 
 .format-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .format-options label { position: relative; }

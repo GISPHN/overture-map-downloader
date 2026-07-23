@@ -6,7 +6,7 @@ import ehWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url";
 import { geojson } from "flatgeobuf";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 import { CATEGORY_TO_GROUP, foodFacilityClass } from "./categories";
-import type { BBox, DatasetType, ManifestItem, OutputFormat } from "./types";
+import type { BBox, CategoryMode, DatasetType, ManifestItem, OutputFormat } from "./types";
 import { downloadBlob, sqlString } from "./utils";
 
 const BUNDLES: duckdb.DuckDBBundles = {
@@ -82,11 +82,12 @@ function buildingSelect(): string {
     geometry`;
 }
 
-function whereClause(dataset: DatasetType, bbox: BBox, categories: string[]): string {
+export function whereClause(dataset: DatasetType, bbox: BBox, categories: string[], categoryMode: CategoryMode): string {
   const spatial = `bbox.xmin <= ${bbox.east} AND bbox.xmax >= ${bbox.west} AND bbox.ymin <= ${bbox.north} AND bbox.ymax >= ${bbox.south}`;
   if (dataset === "building") return spatial;
   if (categories.length === 0) throw new Error("POIカテゴリーを1つ以上選択してください。");
-  return `${spatial} AND categories.primary IN (${categories.map(sqlString).join(",")})`;
+  const field = categoryMode === "all" ? "categories.primary" : "categories.primary";
+  return `${spatial} AND ${field} IN (${categories.map(sqlString).join(",")})`;
 }
 
 function pathsSql(names: string[]): string {
@@ -108,12 +109,13 @@ export type ExportRequest = {
   format: OutputFormat;
   bbox: BBox;
   categories: string[];
+  categoryMode: CategoryMode;
   items: ManifestItem[];
   onStatus: (message: string) => void;
 };
 
 export async function exportOverture(request: ExportRequest): Promise<number> {
-  const { dataset, format, bbox, categories, items, onStatus } = request;
+  const { dataset, format, bbox, categories, categoryMode, items, onStatus } = request;
   if (items.length === 0) throw new Error("選択範囲に対応するデータファイルがありません。");
 
   onStatus("ブラウザ内データベースを準備しています…");
@@ -129,7 +131,7 @@ export async function exportOverture(request: ExportRequest): Promise<number> {
   const connection = await db.connect();
   try {
     const source = `read_parquet(${pathsSql(remoteNames)}, union_by_name=true)`;
-    const where = whereClause(dataset, bbox, categories);
+    const where = whereClause(dataset, bbox, categories, categoryMode);
     onStatus("選択範囲の件数を確認しています…");
     const countTable = await connection.query(`SELECT count(*)::INTEGER AS count FROM ${source} WHERE ${where}`);
     const count = Number(countTable.getChild("count")?.get(0) ?? 0);

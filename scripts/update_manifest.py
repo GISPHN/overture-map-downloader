@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import concurrent.futures
+import csv
 import datetime as dt
+import io
 import json
 from pathlib import Path
 import random
@@ -19,9 +21,10 @@ TARGETS = {
     "building": ("buildings", "building"),
 }
 OUTPUT = Path(__file__).resolve().parents[1] / "public" / "overture-manifest.json"
+CATEGORIES_URL = "https://raw.githubusercontent.com/OvertureMaps/schema/main/docs/schema/concepts/by-theme/places/overture_categories.csv"
 
 
-def load_json(url: str) -> dict:
+def load_text(url: str) -> str:
     last_error: Exception | None = None
     for attempt in range(6):
         try:
@@ -48,12 +51,29 @@ def load_json(url: str) -> dict:
                 capture_output=True,
                 text=True,
             )
-            return json.loads(result.stdout)
-        except (subprocess.CalledProcessError, json.JSONDecodeError) as error:
+            return result.stdout
+        except subprocess.CalledProcessError as error:
             last_error = error
             if attempt < 5:
                 time.sleep((2 ** attempt) + random.random())
     raise RuntimeError(f"STAC request failed after retries: {url}") from last_error
+
+
+def load_json(url: str) -> dict:
+    return json.loads(load_text(url))
+
+
+def place_categories() -> list[dict]:
+    rows = csv.reader(io.StringIO(load_text(CATEGORIES_URL).lstrip("\ufeff")), delimiter=";")
+    next(rows, None)
+    categories = []
+    for row in rows:
+        if len(row) < 2:
+            continue
+        category_id = row[0].strip()
+        path = [part.strip() for part in row[1].strip().strip("[]").split(",") if part.strip()]
+        categories.append({"id": category_id, "path": path})
+    return sorted(categories, key=lambda category: category["id"])
 
 
 def child_url(catalog: dict, base_url: str, title: str) -> str:
@@ -95,6 +115,7 @@ def main() -> None:
     manifest = {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "release": release,
+        "place_categories": place_categories(),
         "datasets": datasets,
     }
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)

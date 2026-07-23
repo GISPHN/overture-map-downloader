@@ -3,7 +3,7 @@ import "./style.css";
 import maplibregl, { type LngLatBoundsLike, type Map as MapLibreMap } from "maplibre-gl";
 import { POI_CATEGORY_GROUPS } from "./categories";
 import { exportOverture } from "./processor";
-import type { BBox, DatasetType, OvertureManifest, OutputFormat } from "./types";
+import type { BBox, CategoryMode, DatasetType, OvertureManifest, OutputFormat, PlaceCategory } from "./types";
 import { bboxAreaKm2, matchingItems, parseBBox } from "./utils";
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -45,11 +45,27 @@ app.innerHTML = `
 
       <div id="category-step" class="step-card">
         <div class="step-title"><span>3</span><h2>POIカテゴリーを選択</h2></div>
-        <div class="category-actions">
-          <button id="select-all" type="button">すべて選択</button>
-          <button id="clear-all" type="button">すべて解除</button>
+        <div class="segmented category-mode" role="radiogroup" aria-label="カテゴリー選択方法">
+          <label><input type="radio" name="category-mode" value="recommended" checked><span>生活向け7分類</span></label>
+          <label><input type="radio" name="category-mode" value="all"><span>全カテゴリー名</span></label>
         </div>
-        <div id="categories" class="category-list"></div>
+        <div id="recommended-categories">
+          <div class="category-actions">
+            <button class="select-visible" type="button">すべて選択</button>
+            <button class="clear-visible" type="button">すべて解除</button>
+          </div>
+          <div id="categories" class="category-list"></div>
+        </div>
+        <div id="all-categories" hidden>
+          <label class="field-label" for="category-search">カテゴリー名を検索</label>
+          <input id="category-search" class="text-input" placeholder="例: supermarket / restaurant" spellcheck="false">
+          <div class="category-actions">
+            <button class="select-visible" type="button">表示中をすべて選択</button>
+            <button class="clear-visible" type="button">すべて解除</button>
+          </div>
+          <div id="all-category-list" class="category-list all-category-list"></div>
+          <p class="category-note">カテゴリー名はOverture公式IDです。検索結果は先頭200件まで表示します。</p>
+        </div>
         <p id="category-summary" class="summary-text"></p>
       </div>
 
@@ -76,12 +92,17 @@ const bboxInput = required<HTMLInputElement>("#bbox");
 const areaSummary = required<HTMLElement>("#area-summary");
 const categoryStep = required<HTMLElement>("#category-step");
 const categoriesContainer = required<HTMLElement>("#categories");
+const recommendedCategories = required<HTMLElement>("#recommended-categories");
+const allCategories = required<HTMLElement>("#all-categories");
+const allCategoryList = required<HTMLElement>("#all-category-list");
+const categorySearch = required<HTMLInputElement>("#category-search");
 const categorySummary = required<HTMLElement>("#category-summary");
 const downloadButton = required<HTMLButtonElement>("#download");
 const statusElement = required<HTMLElement>("#status");
 
 let manifest: OvertureManifest | null = null;
 let selectedBBox = parseBBox(bboxInput.value);
+const selectedAllCategoryIds = new Set<string>();
 
 function required<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -97,8 +118,13 @@ function selectedFormat(): OutputFormat {
   return required<HTMLInputElement>('input[name="format"]:checked').value as OutputFormat;
 }
 
+function selectedCategoryMode(): CategoryMode {
+  return required<HTMLInputElement>('input[name="category-mode"]:checked').value as CategoryMode;
+}
+
 function selectedCategories(): string[] {
-  return [...document.querySelectorAll<HTMLInputElement>('input[name="poi-category"]:checked')]
+  if (selectedCategoryMode() === "all") return [...selectedAllCategoryIds];
+  return [...document.querySelectorAll<HTMLInputElement>('input[name="recommended-category"]:checked')]
     .map((checkbox) => checkbox.value);
 }
 
@@ -146,7 +172,7 @@ function renderCategories(): void {
       </summary>
       <div class="subcategory-list">
         ${Object.entries(group.categories).map(([category, label]) => `
-          <label><input type="checkbox" name="poi-category" value="${category}" data-parent="${group.id}"><span>${label}<small>${category}</small></span></label>
+          <label><input type="checkbox" name="recommended-category" value="${category}" data-parent="${group.id}"><span>${label}<small>${category}</small></span></label>
         `).join("")}
       </div>
     </details>
@@ -159,7 +185,7 @@ function renderCategories(): void {
       updateCategoryState();
     });
   });
-  categoriesContainer.querySelectorAll<HTMLInputElement>('input[name="poi-category"]').forEach((checkbox) => {
+  categoriesContainer.querySelectorAll<HTMLInputElement>('input[name="recommended-category"]').forEach((checkbox) => {
     checkbox.addEventListener("change", updateCategoryState);
   });
 
@@ -178,6 +204,36 @@ function updateCategoryState(): void {
     groupCheck.indeterminate = checked > 0 && checked < children.length;
   });
   categorySummary.textContent = `${selectedCategories().length}カテゴリーを選択中`;
+}
+
+function categoryLabel(category: PlaceCategory): string {
+  return category.id.replaceAll("_", " ");
+}
+
+function matchingAllCategories(): PlaceCategory[] {
+  const query = categorySearch.value.trim().toLowerCase();
+  const source = manifest?.place_categories ?? [];
+  if (!query) return source;
+  return source.filter((category) =>
+    category.id.includes(query) || category.path.some((part) => part.includes(query)),
+  );
+}
+
+function renderAllCategories(): void {
+  const matches = matchingAllCategories();
+  allCategoryList.innerHTML = matches.slice(0, 200).map((category) => `
+    <label class="all-category-item">
+      <input type="checkbox" name="all-category" value="${category.id}" ${selectedAllCategoryIds.has(category.id) ? "checked" : ""}>
+      <span><strong>${categoryLabel(category)}</strong><small>${category.id}</small><small>${category.path.join(" › ")}</small></span>
+    </label>
+  `).join("") || `<p class="empty-result">一致するカテゴリー名がありません。</p>`;
+  allCategoryList.querySelectorAll<HTMLInputElement>('input[name="all-category"]').forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) selectedAllCategoryIds.add(checkbox.value);
+      else selectedAllCategoryIds.delete(checkbox.value);
+      updateCategoryState();
+    });
+  });
 }
 
 renderCategories();
@@ -236,13 +292,39 @@ document.querySelectorAll<HTMLInputElement>('input[name="dataset"]').forEach((ra
   });
 });
 
-required<HTMLButtonElement>("#select-all").addEventListener("click", () => {
-  categoriesContainer.querySelectorAll<HTMLInputElement>('input[name="poi-category"]').forEach((box) => { box.checked = true; });
-  updateCategoryState();
+document.querySelectorAll<HTMLInputElement>('input[name="category-mode"]').forEach((radio) => {
+  radio.addEventListener("change", () => {
+    const allMode = selectedCategoryMode() === "all";
+    recommendedCategories.hidden = allMode;
+    allCategories.hidden = !allMode;
+    if (allMode) renderAllCategories();
+    updateCategoryState();
+  });
 });
-required<HTMLButtonElement>("#clear-all").addEventListener("click", () => {
-  categoriesContainer.querySelectorAll<HTMLInputElement>('input[name="poi-category"]').forEach((box) => { box.checked = false; });
-  updateCategoryState();
+categorySearch.addEventListener("input", renderAllCategories);
+document.querySelectorAll<HTMLButtonElement>(".select-visible").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (selectedCategoryMode() === "all") {
+      matchingAllCategories().slice(0, 200).forEach((category) => selectedAllCategoryIds.add(category.id));
+      renderAllCategories();
+    } else {
+      categoriesContainer.querySelectorAll<HTMLInputElement>('input[name="recommended-category"]')
+        .forEach((box) => { box.checked = true; });
+    }
+    updateCategoryState();
+  });
+});
+document.querySelectorAll<HTMLButtonElement>(".clear-visible").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (selectedCategoryMode() === "all") {
+      selectedAllCategoryIds.clear();
+      renderAllCategories();
+    } else {
+      categoriesContainer.querySelectorAll<HTMLInputElement>('input[name="recommended-category"]')
+        .forEach((box) => { box.checked = false; });
+    }
+    updateCategoryState();
+  });
 });
 
 function setStatus(message: string, state: "normal" | "success" | "error" = "normal"): void {
@@ -258,6 +340,7 @@ async function loadManifest(): Promise<void> {
   const response = await fetch("./overture-manifest.json", { cache: "no-cache" });
   if (!response.ok) throw new Error("Overtureマニフェストを読み込めませんでした。");
   manifest = await response.json() as OvertureManifest;
+  renderAllCategories();
   setStatus(`準備完了（Overture ${manifest.release}）`, "success");
 }
 
@@ -275,7 +358,8 @@ downloadButton.addEventListener("click", async () => {
     const items = matchingItems(manifest.datasets[dataset], bbox);
     downloadButton.disabled = true;
     const count = await exportOverture({
-      dataset, format, bbox, categories: dataset === "place" ? selectedCategories() : [], items,
+      dataset, format, bbox, categories: dataset === "place" ? selectedCategories() : [],
+      categoryMode: selectedCategoryMode(), items,
       onStatus: (message) => setStatus(message),
     });
     setStatus(`${count.toLocaleString()}件のダウンロードを開始しました。`, "success");
