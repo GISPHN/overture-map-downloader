@@ -112,20 +112,28 @@ export type ExportRequest = {
   categoryMode: CategoryMode;
   items: ManifestItem[];
   onStatus: (message: string) => void;
+  onProgress: (percent: number | null, message: string) => void;
 };
 
 export async function exportOverture(request: ExportRequest): Promise<number> {
-  const { dataset, format, bbox, categories, categoryMode, items, onStatus } = request;
+  const { dataset, format, bbox, categories, categoryMode, items, onStatus, onProgress } = request;
   if (items.length === 0) throw new Error("選択範囲に対応するデータファイルがありません。");
 
   onStatus("ブラウザ内データベースを準備しています…");
+  onProgress(5, "データベースを準備");
   const db = await database();
   const remoteNames = items.map((_, index) => `remote_${dataset}_${index}.parquet`);
   await db.dropFiles(remoteNames).catch(() => null);
+  let registeredFiles = 0;
   await Promise.all(
-    items.map((item, index) =>
-      db.registerFileURL(remoteNames[index], item.url, duckdb.DuckDBDataProtocol.HTTP, true),
-    ),
+    items.map(async (item, index) => {
+      await db.registerFileURL(remoteNames[index], item.url, duckdb.DuckDBDataProtocol.HTTP, true);
+      registeredFiles += 1;
+      onProgress(
+        10 + Math.round((registeredFiles / items.length) * 10),
+        `対象ファイルを準備（${registeredFiles}/${items.length}）`,
+      );
+    }),
   );
 
   const connection = await db.connect();
@@ -133,9 +141,11 @@ export async function exportOverture(request: ExportRequest): Promise<number> {
     const source = `read_parquet(${pathsSql(remoteNames)}, union_by_name=true)`;
     const where = whereClause(dataset, bbox, categories, categoryMode);
     onStatus("選択範囲の件数を確認しています…");
+    onProgress(null, "対象データを読み込み、件数を確認");
     const countTable = await connection.query(`SELECT count(*)::INTEGER AS count FROM ${source} WHERE ${where}`);
     const count = Number(countTable.getChild("count")?.get(0) ?? 0);
     if (count === 0) throw new Error("指定条件に該当するデータがありませんでした。");
+    onProgress(45, `${count.toLocaleString()}件を確認`);
 
     if ((format === "fgb" || format === "geojson") && count > 200_000) {
       throw new Error(
@@ -150,23 +160,29 @@ export async function exportOverture(request: ExportRequest): Promise<number> {
 
     if (format === "geoparquet") {
       onStatus(`${count.toLocaleString()}件をGeoParquetへ変換しています…`);
+      onProgress(null, `${count.toLocaleString()}件をGeoParquetへ変換`);
       const output = `${stem}.parquet`;
       await db.dropFile(output).catch(() => null);
       await connection.query(`COPY (${baseQuery}) TO ${sqlString(output)} (FORMAT PARQUET, COMPRESSION ZSTD)`);
+      onProgress(90, "出力ファイルをブラウザへ転送");
       const bytes = await db.copyFileToBuffer(output);
       downloadBlob(new Blob([bytes as BlobPart], { type: "application/vnd.apache.parquet" }), output);
+      onProgress(100, "ダウンロードを開始");
       return count;
     }
 
     onStatus("空間変換機能を読み込んでいます…");
+    onProgress(55, "空間変換機能を準備");
     await connection.query("LOAD spatial");
     const columns = dataset === "place"
       ? `id, "施設名", "生活機能区分", "食料品施設区分", "Overture主要カテゴリー", confidence, operating_status, websites, phones, addresses`
       : `id, "施設名", subtype, class, height, num_floors, num_floors_underground, min_height, min_floor, has_parts, roof_shape, roof_height`;
     onStatus(`${count.toLocaleString()}件の地物を変換しています…`);
+    onProgress(null, `${count.toLocaleString()}件の地物を変換`);
     const table = await connection.query(
       `SELECT ${columns}, ST_AsGeoJSON(geometry) AS geometry_json FROM (${baseQuery})`,
     );
+    onProgress(78, "属性とジオメトリを整形");
     const features: Feature[] = table.toArray().map((row) => {
       const record = safeJsonValue(row.toJSON()) as Record<string, unknown>;
       const geometry = JSON.parse(String(record.geometry_json)) as Geometry;
@@ -177,15 +193,18 @@ export async function exportOverture(request: ExportRequest): Promise<number> {
 
     if (format === "fgb") {
       onStatus("FlatGeobufファイルを作成しています…");
+      onProgress(88, "FlatGeobufファイルを作成");
       const bytes = geojson.serialize(collection, 4326);
       downloadBlob(new Blob([bytes as BlobPart], { type: "application/octet-stream" }), `${stem}.fgb`);
     } else {
       onStatus("GeoJSONファイルを作成しています…");
+      onProgress(88, "GeoJSONファイルを作成");
       downloadBlob(
         new Blob([JSON.stringify(collection)], { type: "application/geo+json" }),
         `${stem}.geojson`,
       );
     }
+    onProgress(100, "ダウンロードを開始");
     return count;
   } finally {
     await connection.close();

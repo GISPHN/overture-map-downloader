@@ -77,6 +77,13 @@ app.innerHTML = `
           <label><input type="radio" name="format" value="geojson"><span><strong>GeoJSON</strong><small>20万件まで</small></span></label>
         </div>
         <button id="download" class="download-button" type="button">データを取得</button>
+        <div id="progress-wrap" class="progress-wrap" aria-live="polite">
+          <div class="progress-caption">
+            <span id="progress-label">待機中</span>
+            <span id="progress-value">0%</span>
+          </div>
+          <progress id="progress" max="100" value="0">0%</progress>
+        </div>
         <div id="status" class="status" role="status" aria-live="polite">準備中…</div>
       </div>
     </aside>
@@ -98,6 +105,9 @@ const allCategoryList = required<HTMLElement>("#all-category-list");
 const categorySearch = required<HTMLInputElement>("#category-search");
 const categorySummary = required<HTMLElement>("#category-summary");
 const downloadButton = required<HTMLButtonElement>("#download");
+const progressElement = required<HTMLProgressElement>("#progress");
+const progressLabel = required<HTMLElement>("#progress-label");
+const progressValue = required<HTMLElement>("#progress-value");
 const statusElement = required<HTMLElement>("#status");
 
 let manifest: OvertureManifest | null = null;
@@ -332,6 +342,19 @@ function setStatus(message: string, state: "normal" | "success" | "error" = "nor
   statusElement.dataset.state = state;
 }
 
+function setProgress(percent: number | null, label: string): void {
+  progressLabel.textContent = label;
+  if (percent === null) {
+    progressElement.removeAttribute("value");
+    progressValue.textContent = "処理中";
+    return;
+  }
+  const normalized = Math.max(0, Math.min(100, Math.round(percent)));
+  progressElement.value = normalized;
+  progressValue.textContent = `${normalized}%`;
+  progressElement.textContent = `${normalized}%`;
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -357,14 +380,17 @@ downloadButton.addEventListener("click", async () => {
     }
     const items = matchingItems(manifest.datasets[dataset], bbox);
     downloadButton.disabled = true;
+    setProgress(0, "処理を開始");
     const count = await exportOverture({
       dataset, format, bbox, categories: dataset === "place" ? selectedCategories() : [],
       categoryMode: selectedCategoryMode(), items,
       onStatus: (message) => setStatus(message),
+      onProgress: setProgress,
     });
     setStatus(`${count.toLocaleString()}件のダウンロードを開始しました。`, "success");
   } catch (error) {
     console.error(error);
+    setProgress(0, "処理を完了できませんでした");
     setStatus(errorMessage(error), "error");
   } finally {
     downloadButton.disabled = false;

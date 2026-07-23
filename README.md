@@ -7,6 +7,7 @@ Overture MapsのPOIとBuildingsを、地図またはbboxで範囲指定して取
 - 地図の表示範囲またはbboxによる範囲指定
 - POIとBuildingsの選択
 - POIの日本語7分類と、Overture公式の全カテゴリー名からの検索・複数選択
+- 対象ファイルの準備、抽出、変換、ファイル生成を示す進捗表示
 - `names.primary`からの施設名作成
 - POIへの次の列の追加
   - `施設名`
