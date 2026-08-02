@@ -40,6 +40,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 420px; min-height: c
 .text-input { width: 100%; padding: 10px; border: 1px solid #b8cac5; border-radius: 7px; font-family: ui-monospace, monospace; font-size: .76rem; }
 .primary-button, .secondary-button, .download-button { width: 100%; border: 0; border-radius: 8px; padding: 11px 14px; }
 .primary-button, .download-button { color: white; background: #0b6e69; font-weight: 700; }
+.primary-button[data-active="true"] { background: #8b3a3a; }
 .secondary-button { margin-top: 8px; color: #075b57; background: #e0f1ec; }
 .download-button { margin-top: 14px; padding: 14px; background: #d35d2f; font-size: 1rem; }
 .progress-wrap { margin-top: 12px; }

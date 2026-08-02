@@ -22,7 +22,7 @@ app.innerHTML = `
   <main>
     <section class="map-panel" aria-label="範囲選択地図">
       <div id="map"></div>
-      <div class="map-help">地図を移動・拡大し「現在の地図範囲を使用」を押してください。</div>
+      <div class="map-help">地図を移動・拡大し、四角形を描いて取得範囲を指定できます。</div>
     </section>
 
     <aside class="control-panel">
@@ -36,7 +36,9 @@ app.innerHTML = `
 
       <div class="step-card">
         <div class="step-title"><span>2</span><h2>範囲を指定</h2></div>
-        <button id="use-map" class="primary-button" type="button">現在の地図範囲を使用</button>
+        <button id="draw-bbox" class="primary-button" type="button">地図上で四角形を描く</button>
+        <button id="use-map" class="secondary-button" type="button">現在の表示範囲を使用</button>
+        <p id="draw-help" class="category-note">四角形を描くボタンを押し、地図上をドラッグしてください。</p>
         <label class="field-label" for="bbox">bbox（西端, 南端, 東端, 北端）</label>
         <input id="bbox" class="text-input" value="139.556402574,35.575149584,139.868524176,35.853605896" spellcheck="false">
         <button id="apply-bbox" class="secondary-button" type="button">入力したbboxを地図に反映</button>
@@ -134,8 +136,10 @@ function selectedCategoryMode(): CategoryMode {
 
 function selectedCategories(): string[] {
   if (selectedCategoryMode() === "all") return [...selectedAllCategoryIds];
-  return [...document.querySelectorAll<HTMLInputElement>('input[name="recommended-category"]:checked')]
-    .map((checkbox) => checkbox.value);
+  return [...new Set(
+    [...document.querySelectorAll<HTMLInputElement>('input[name="recommended-category"]:checked')]
+      .flatMap((checkbox) => checkbox.dataset.taxonomy?.split(",") ?? []),
+  )];
 }
 
 function bboxText(bbox: BBox): string {
@@ -181,8 +185,8 @@ function renderCategories(): void {
         <span class="chevron" aria-hidden="true">⌄</span>
       </summary>
       <div class="subcategory-list">
-        ${Object.entries(group.categories).map(([category, label]) => `
-          <label><input type="checkbox" name="recommended-category" value="${category}" data-parent="${group.id}"><span>${label}<small>${category}</small></span></label>
+        ${group.choices.map((choice) => `
+          <label><input type="checkbox" name="recommended-category" value="${choice.id}" data-taxonomy="${choice.taxonomy.join(",")}" data-parent="${group.id}"><span>${choice.label}<small>${choice.taxonomy.join(" / ")}</small></span></label>
         `).join("")}
       </div>
     </details>
@@ -264,6 +268,55 @@ const map = new maplibregl.Map({
     },
     layers: [{ id: "osm", type: "raster", source: "osm" }],
   },
+});
+
+let drawingBBox = false;
+let drawStart: maplibregl.LngLat | null = null;
+const drawButton = required<HTMLButtonElement>("#draw-bbox");
+const drawHelp = required<HTMLElement>("#draw-help");
+
+function setDrawingMode(enabled: boolean): void {
+  drawingBBox = enabled;
+  drawStart = null;
+  drawButton.textContent = enabled ? "描画をキャンセル" : "地図上で四角形を描く";
+  drawButton.dataset.active = enabled ? "true" : "false";
+  drawHelp.textContent = enabled
+    ? "地図上で始点から終点までドラッグしてください。"
+    : "四角形を描くボタンを押し、地図上をドラッグしてください。";
+  map.getCanvas().style.cursor = enabled ? "crosshair" : "";
+  if (enabled) map.dragPan.disable();
+  else map.dragPan.enable();
+}
+
+drawButton.addEventListener("click", () => setDrawingMode(!drawingBBox));
+
+map.on("mousedown", (event) => {
+  if (!drawingBBox) return;
+  event.preventDefault();
+  drawStart = event.lngLat;
+});
+
+map.on("mousemove", (event) => {
+  if (!drawingBBox || !drawStart) return;
+  const bbox: BBox = {
+    west: Math.min(drawStart.lng, event.lngLat.lng),
+    south: Math.min(drawStart.lat, event.lngLat.lat),
+    east: Math.max(drawStart.lng, event.lngLat.lng),
+    north: Math.max(drawStart.lat, event.lngLat.lat),
+  };
+  updateBBoxDisplay(map, bbox);
+});
+
+map.on("mouseup", (event) => {
+  if (!drawingBBox || !drawStart) return;
+  const bbox: BBox = {
+    west: Math.min(drawStart.lng, event.lngLat.lng),
+    south: Math.min(drawStart.lat, event.lngLat.lat),
+    east: Math.max(drawStart.lng, event.lngLat.lng),
+    north: Math.max(drawStart.lat, event.lngLat.lat),
+  };
+  updateBBoxDisplay(map, bbox);
+  setDrawingMode(false);
 });
 map.addControl(new maplibregl.NavigationControl(), "top-right");
 map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-left");

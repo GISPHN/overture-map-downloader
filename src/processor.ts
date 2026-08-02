@@ -5,8 +5,8 @@ import mvpWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url
 import ehWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url";
 import { geojson } from "flatgeobuf";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { CATEGORY_TO_GROUP } from "./categories";
 import { DISPENSING_SUBFACILITY_PATTERNS, DRUGSTORE_CHAINS, SUPERMARKET_PATTERNS } from "./foodAccess";
+import { LIFE_FUNCTION_RULES } from "./lifeFunctions";
 import type { BBox, CategoryMode, DatasetType, ManifestItem, OutputFormat } from "./types";
 import { downloadBlob, sqlString } from "./utils";
 
@@ -31,11 +31,8 @@ async function database(): Promise<duckdb.AsyncDuckDB> {
   return databasePromise;
 }
 
-function caseExpression(mapping: Map<string, string>, expression: string): string {
-  const clauses = [...mapping.entries()].map(
-    ([category, label]) => `WHEN ${sqlString(category)} THEN ${sqlString(label)}`,
-  );
-  return `CASE ${expression} ${clauses.join(" ")} ELSE NULL END`;
+function hierarchyMatches(categories: string[]): string {
+  return `list_has_any(taxonomy.hierarchy, [${categories.map(sqlString).join(",")}])`;
 }
 
 function nameMatches(patterns: string[]): string {
@@ -99,26 +96,56 @@ function foodReasonExpression(): string {
     ELSE '根拠不足のため自動分類しない' END`;
 }
 
+function foodRelevantExpression(): string {
+  return `(${hierarchyMatches([
+    "butcher_shop", "fishmonger", "produce_store", "department_store", "superstore",
+    "grocery_store", "drugstore", "convenience_store", "farmers_market",
+  ])} OR (taxonomy.primary = 'pharmacy' AND ${knownDrugstoreExpression()}))`;
+}
+
+function lifeRuleCase(field: "group" | "detail" | "code"): string {
+  return LIFE_FUNCTION_RULES
+    .map((rule) => `WHEN ${hierarchyMatches(rule.taxonomy)} THEN ${sqlString(rule[field])}`)
+    .join(" ");
+}
+
+function lifeGroupExpression(foodRelevant: string): string {
+  return `CASE WHEN ${foodRelevant} THEN '食料品・日用品の購入' ${lifeRuleCase("group")} ELSE '分類対象外' END`;
+}
+
+function lifeDetailExpression(foodRelevant: string, foodLabel: string): string {
+  return `CASE WHEN ${foodRelevant} THEN ${foodLabel} ${lifeRuleCase("detail")} ELSE '分類対象外' END`;
+}
+
+function lifeCodeExpression(foodRelevant: string, foodCode: string): string {
+  return `CASE WHEN ${foodRelevant} THEN CASE ${foodCode}
+    WHEN 1 THEN '1-01' WHEN 2 THEN '1-02' WHEN 3 THEN '1-03' WHEN 4 THEN '1-04'
+    WHEN 5 THEN '1-05' WHEN 9 THEN '1-09' ELSE '1-00' END
+    ${lifeRuleCase("code")} ELSE '0-00' END`;
+}
+
 function placeSelect(forSimpleFormat: boolean): string {
-  const groupCase = caseExpression(CATEGORY_TO_GROUP, "taxonomy.primary");
   const foodCode = foodCodeExpression();
+  const foodLabel = foodLabelExpression(foodCode);
+  const foodRelevant = foodRelevantExpression();
   const websites = forSimpleFormat ? "to_json(websites) AS websites" : "websites";
   const phones = forSimpleFormat ? "to_json(phones) AS phones" : "phones";
   const addresses = forSimpleFormat ? "to_json(addresses) AS addresses" : "addresses";
   return `
     id,
     names.primary AS "施設名",
-    ${groupCase} AS "生活機能区分",
-    ${foodCode} AS "食料品アクセス区分コード",
-    ${foodLabelExpression(foodCode)} AS "食料品アクセス区分",
-    ${foodReasonExpression()} AS "分類根拠",
+    ${lifeGroupExpression(foodRelevant)} AS "生活機能区分",
+    ${lifeCodeExpression(foodRelevant, foodCode)} AS "生活機能詳細コード",
+    ${lifeDetailExpression(foodRelevant, foodLabel)} AS "生活機能詳細区分",
+    CASE WHEN ${foodRelevant} THEN ${foodCode} ELSE NULL END AS "食料品アクセス区分コード",
+    CASE WHEN ${foodRelevant} THEN ${foodLabel} ELSE NULL END AS "食料品アクセス区分",
+    CASE WHEN ${foodRelevant} THEN ${foodReasonExpression()} ELSE NULL END AS "食料品分類根拠",
     CASE WHEN ${dispensingSubfacilityExpression()} THEN true ELSE false END AS "調剤サブ施設フラグ",
     ${chainCase(DRUGSTORE_CHAINS)} AS "ドラッグストアチェーン",
     ${chainCase(SUPERMARKET_PATTERNS)} AS "スーパーマーケットチェーン",
     taxonomy.primary AS "Overture新カテゴリー",
     basic_category AS "Overture基本カテゴリー",
     ${forSimpleFormat ? "to_json(taxonomy.hierarchy)" : "taxonomy.hierarchy"} AS "Overture分類階層",
-    categories.primary AS "Overture旧カテゴリー",
     confidence,
     operating_status,
     ${websites},
@@ -240,7 +267,7 @@ export async function exportOverture(request: ExportRequest): Promise<number> {
     onProgress(55, "空間変換機能を準備");
     await connection.query("LOAD spatial");
     const columns = dataset === "place"
-      ? `id, "施設名", "生活機能区分", "食料品アクセス区分コード", "食料品アクセス区分", "分類根拠", "調剤サブ施設フラグ", "ドラッグストアチェーン", "スーパーマーケットチェーン", "Overture新カテゴリー", "Overture基本カテゴリー", "Overture分類階層", "Overture旧カテゴリー", confidence, operating_status, websites, phones, addresses`
+      ? `id, "施設名", "生活機能区分", "生活機能詳細コード", "生活機能詳細区分", "食料品アクセス区分コード", "食料品アクセス区分", "食料品分類根拠", "調剤サブ施設フラグ", "ドラッグストアチェーン", "スーパーマーケットチェーン", "Overture新カテゴリー", "Overture基本カテゴリー", "Overture分類階層", confidence, operating_status, websites, phones, addresses`
       : `id, "施設名", subtype, class, height, num_floors, num_floors_underground, min_height, min_floor, has_parts, roof_shape, roof_height`;
     onStatus(`${count.toLocaleString()}件の地物を変換しています…`);
     onProgress(null, `${count.toLocaleString()}件の地物を変換`);
