@@ -12,8 +12,10 @@ Overture MapsのPOIとBuildingsを、地図またはbboxで範囲指定して取
 - POIへの次の列の追加
   - `施設名`
   - `生活機能区分`
-  - `食料品施設区分`
-  - `Overture主要カテゴリー`
+  - `食料品アクセス区分コード`、`食料品アクセス区分`、`分類根拠`
+  - `調剤サブ施設フラグ`
+  - `ドラッグストアチェーン`、`スーパーマーケットチェーン`
+  - Overtureの新`taxonomy`、`basic_category`、旧カテゴリー（検証用）
 - GeoParquet、FlatGeobuf、GeoJSON出力
 - 最新Overtureリリースへの日次追従
 - アカウント登録、サーバー保存、有料APIなし
@@ -47,6 +49,21 @@ GitHub PagesはHTML、CSS、JavaScriptとマニフェストだけを配信しま
 - それを超えるデータにはGeoParquetを使用してください。
 - 公共交通など一部のOvertureカテゴリーは、日本国内の全施設を網羅するものではありません。
 - Overtureのカテゴリーやスキーマ変更により、分類設定の更新が必要になる場合があります。
+
+## 食料品アクセス分類
+
+農林水産省の食料品アクセスマップの業態区分を踏まえ、1「生鮮食料品専門小売店」、2「百貨店・総合スーパー・食料品スーパー」、3「ドラッグストア」、4「コンビニエンスストア」、5「農産物直売所・ファーマーズマーケット」、9「その他の専門食料品店」、0「判定保留・除外」を付与します。
+
+分類はOvertureの新taxonomyを優先します。新taxonomyで`grocery_store`に統合されたスーパーと、`pharmacy`に入ったドラッグストアは店舗名辞書で補います。ドラッグストア辞書はJACDS会員企業と各グループ公式情報を基礎に、北海道から沖縄までの地域ブランドを収録しています。調剤窓口などのサブPOIは重複を避けるため区分0とします。
+
+名称辞書による分類は推定です。開店・統合・屋号変更や表記揺れがあるため、分析時は`分類根拠`と原カテゴリーも確認してください。
+
+分類設計の主な参照先:
+
+- [農林水産省 食料品アクセス（買い物弱者・買い物難民等）問題ポータルサイト](https://www.maff.go.jp/j/shokusan/eat/access_genjo.html)
+- [Overture Maps Places Taxonomy](https://docs.overturemaps.org/guides/places/taxonomy/)
+- [日本チェーンドラッグストア協会 会員リスト](https://jacds.gr.jp/member-hp/)
+- [ツルハホールディングス グループ企業一覧](https://www.tsuruha-hd.co.jp/company/list/)
 
 ## ローカル開発
 

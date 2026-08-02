@@ -21,7 +21,7 @@ TARGETS = {
     "building": ("buildings", "building"),
 }
 OUTPUT = Path(__file__).resolve().parents[1] / "public" / "overture-manifest.json"
-CATEGORIES_URL = "https://raw.githubusercontent.com/OvertureMaps/schema/main/docs/schema/concepts/by-theme/places/overture_categories.csv"
+CATEGORIES_URL = "https://docs.google.com/spreadsheets/d/1_i2S48zTDoHff0uX-d8Nes3bR-Xee8drx27Gyi80CQ0/gviz/tq?tqx=out:csv"
 
 
 def load_text(url: str) -> str:
@@ -64,16 +64,16 @@ def load_json(url: str) -> dict:
 
 
 def place_categories() -> list[dict]:
-    rows = csv.reader(io.StringIO(load_text(CATEGORIES_URL).lstrip("\ufeff")), delimiter=";")
-    next(rows, None)
+    rows = csv.DictReader(io.StringIO(load_text(CATEGORIES_URL).lstrip("\ufeff")))
     categories = []
     for row in rows:
-        if len(row) < 2:
+        category_id = (row.get("New Primary Category") or "").strip()
+        hierarchy = (row.get("New Primary Hierarchy") or "").strip()
+        if not category_id or not hierarchy or (row.get("PC Removed") or "").strip().upper() == "TRUE":
             continue
-        category_id = row[0].strip()
-        path = [part.strip() for part in row[1].strip().strip("[]").split(",") if part.strip()]
+        path = [part.strip() for part in hierarchy.split(">") if part.strip()]
         categories.append({"id": category_id, "path": path})
-    return sorted(categories, key=lambda category: category["id"])
+    return sorted({category["id"]: category for category in categories}.values(), key=lambda category: category["id"])
 
 
 def child_url(catalog: dict, base_url: str, title: str) -> str:

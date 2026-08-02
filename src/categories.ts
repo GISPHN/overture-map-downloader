@@ -12,17 +12,17 @@ export const POI_CATEGORY_GROUPS: CategoryGroup[] = [
     description: "食料品店、コンビニ、スーパー、ドラッグストアなど",
     categories: {
       convenience_store: "コンビニ",
-      supermarket: "スーパーマーケット",
-      grocery_store: "一般食料品店",
-      bakery: "パン店",
+      grocery_store: "食料品店（名称で再分類）",
       butcher_shop: "精肉店",
-      specialty_grocery_store: "専門食料品店",
-      fruits_and_vegetables: "青果店",
+      fishmonger: "鮮魚店",
+      produce_store: "青果店",
       farmers_market: "農産物直売所",
-      health_food_store: "健康食品店",
       organic_grocery_store: "有機食品店",
+      asian_grocery_store: "アジア食料品店",
+      japanese_grocery_store: "日本食料品店",
+      international_grocery_store: "国際食料品店",
       drugstore: "ドラッグストア",
-      discount_store: "ディスカウントストア",
+      pharmacy: "薬局（名称でドラッグストアを救済）",
     },
   },
   {
@@ -33,10 +33,10 @@ export const POI_CATEGORY_GROUPS: CategoryGroup[] = [
       pharmacy: "薬局",
       hospital: "病院・医療機関",
       dentist: "歯科",
-      health_and_medical: "保健医療施設",
+      health_care: "保健医療施設",
       doctor: "医師・診療所",
       orthopedist: "整形外科",
-      medical_center: "医療センター",
+      outpatient_care_facility: "外来医療施設",
       walk_in_clinic: "外来診療所",
       internal_medicine: "内科",
       eye_care_clinic: "眼科関連施設",
@@ -52,14 +52,13 @@ export const POI_CATEGORY_GROUPS: CategoryGroup[] = [
     label: "高齢者福祉・地域支援",
     description: "高齢者施設、地域交流、社会福祉サービスなど",
     categories: {
-      community_services_non_profits: "地域サービス・非営利団体",
-      social_service_organizations: "社会福祉関係機関",
+      social_or_community_service: "地域・社会福祉サービス",
       retirement_home: "高齢者住宅・施設",
       community_center: "地域交流施設",
       disability_services_and_support_organization: "障害福祉関係施設",
       social_and_human_services: "社会・生活支援サービス",
       skilled_nursing: "看護・介護施設",
-      senior_citizen_services: "高齢者支援サービス",
+      senior_citizen_service: "高齢者支援サービス",
     },
   },
   {
@@ -67,12 +66,12 @@ export const POI_CATEGORY_GROUPS: CategoryGroup[] = [
     label: "金融・郵便・行政サービス",
     description: "銀行、ATM、郵便局、行政施設など",
     categories: {
-      atms: "ATM",
+      atm: "ATM",
       post_office: "郵便局",
       public_service_and_government: "公共・行政施設",
       public_and_government_association: "公共関係機関",
-      banks: "銀行",
-      bank_credit_union: "銀行・信用金庫等",
+      bank: "銀行",
+      bank_or_credit_union: "銀行・信用金庫等",
       central_government_office: "国の行政機関",
       town_hall: "市役所・町村役場",
       government_services: "行政サービス",
@@ -83,7 +82,7 @@ export const POI_CATEGORY_GROUPS: CategoryGroup[] = [
     label: "公共交通",
     description: "鉄道駅、バス関係施設、タクシーなど",
     categories: {
-      transportation: "交通施設",
+      travel_and_transportation: "交通施設",
       train_station: "鉄道駅",
       bus_station: "バス関係施設",
       taxi_service: "タクシー",
@@ -110,10 +109,10 @@ export const POI_CATEGORY_GROUPS: CategoryGroup[] = [
     categories: {
       gas_station: "ガソリンスタンド",
       eyewear_and_optician: "眼鏡店",
-      funeral_services_and_cemeteries: "葬祭・墓地",
+      funeral_service: "葬祭サービス",
       dry_cleaning: "クリーニング店",
       laundromat: "コインランドリー",
-      laundry_services: "洗濯サービス",
+      laundry_service: "洗濯サービス",
       food_delivery_service: "食品配達サービス",
     },
   },
@@ -127,24 +126,4 @@ for (const group of POI_CATEGORY_GROUPS) {
     CATEGORY_TO_GROUP.set(category, group.label);
     CATEGORY_TO_JAPANESE.set(category, label);
   }
-}
-
-export function foodFacilityClass(category: string): string | null {
-  if (category === "convenience_store") return "コンビニ";
-  if (category === "supermarket") return "スーパーマーケット";
-  if (category === "grocery_store") return "一般食料品店";
-  if (
-    [
-      "bakery",
-      "butcher_shop",
-      "specialty_grocery_store",
-      "fruits_and_vegetables",
-      "farmers_market",
-      "health_food_store",
-      "organic_grocery_store",
-    ].includes(category)
-  ) {
-    return "専門食料品店";
-  }
-  return null;
 }

@@ -5,7 +5,8 @@ import mvpWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url
 import ehWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url";
 import { geojson } from "flatgeobuf";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { CATEGORY_TO_GROUP, foodFacilityClass } from "./categories";
+import { CATEGORY_TO_GROUP } from "./categories";
+import { DISPENSING_SUBFACILITY_PATTERNS, DRUGSTORE_CHAINS, SUPERMARKET_PATTERNS } from "./foodAccess";
 import type { BBox, CategoryMode, DatasetType, ManifestItem, OutputFormat } from "./types";
 import { downloadBlob, sqlString } from "./utils";
 
@@ -37,17 +38,70 @@ function caseExpression(mapping: Map<string, string>, expression: string): strin
   return `CASE ${expression} ${clauses.join(" ")} ELSE NULL END`;
 }
 
-function foodCaseExpression(): string {
-  const categories = [...CATEGORY_TO_GROUP.keys()];
-  const clauses = categories
-    .map((category) => [category, foodFacilityClass(category)] as const)
-    .filter((entry): entry is readonly [string, string] => entry[1] !== null)
-    .map(([category, label]) => `WHEN ${sqlString(category)} THEN ${sqlString(label)}`);
-  return `CASE categories.primary ${clauses.join(" ")} ELSE NULL END`;
+function nameMatches(patterns: string[]): string {
+  return `(${patterns.map((pattern) => `lower(names.primary) LIKE ${sqlString(`%${pattern.toLocaleLowerCase("ja-JP")}%`)}`).join(" OR ")})`;
+}
+
+function chainCase(entries: { brand: string; patterns: string[] }[]): string {
+  return `CASE ${entries.map((entry) => `WHEN ${nameMatches(entry.patterns)} THEN ${sqlString(entry.brand)}`).join(" ")} ELSE NULL END`;
+}
+
+function dispensingSubfacilityExpression(): string {
+  return nameMatches(DISPENSING_SUBFACILITY_PATTERNS);
+}
+
+function knownDrugstoreExpression(): string {
+  return `(${nameMatches(DRUGSTORE_CHAINS.flatMap((entry) => entry.patterns))})`;
+}
+
+function knownSupermarketExpression(): string {
+  return `(${nameMatches(SUPERMARKET_PATTERNS.flatMap((entry) => entry.patterns))})`;
+}
+
+function foodCodeExpression(): string {
+  const subfacility = dispensingSubfacilityExpression();
+  const drugstore = knownDrugstoreExpression();
+  const supermarket = knownSupermarketExpression();
+  return `CASE
+    WHEN ${subfacility} THEN 0
+    WHEN taxonomy.primary IN ('butcher_shop','fishmonger','seafood_market','produce_store') THEN 1
+    WHEN taxonomy.primary IN ('department_store','superstore') THEN 2
+    WHEN taxonomy.primary IN ('grocery_store','organic_grocery_store') AND ${supermarket} THEN 2
+    WHEN taxonomy.primary = 'drugstore' THEN 3
+    WHEN taxonomy.primary = 'pharmacy' AND ${drugstore} THEN 3
+    WHEN taxonomy.primary = 'convenience_store' THEN 4
+    WHEN taxonomy.primary = 'farmers_market' THEN 5
+    WHEN taxonomy.primary IN ('asian_grocery_store','japanese_grocery_store','international_grocery_store','indian_grocery_store','korean_grocery_store','organic_grocery_store','ethical_grocery_store') THEN 9
+    ELSE 0 END`;
+}
+
+function foodLabelExpression(code: string): string {
+  return `CASE ${code}
+    WHEN 1 THEN '生鮮食料品専門小売店'
+    WHEN 2 THEN '百貨店・総合スーパー・食料品スーパー'
+    WHEN 3 THEN 'ドラッグストア'
+    WHEN 4 THEN 'コンビニエンスストア'
+    WHEN 5 THEN '農産物直売所・ファーマーズマーケット'
+    WHEN 9 THEN 'その他の専門食料品店'
+    ELSE '判定保留・除外' END`;
+}
+
+function foodReasonExpression(): string {
+  const subfacility = dispensingSubfacilityExpression();
+  const drugstore = knownDrugstoreExpression();
+  const supermarket = knownSupermarketExpression();
+  return `CASE
+    WHEN ${subfacility} THEN '調剤サブ施設名のため除外'
+    WHEN taxonomy.primary IN ('butcher_shop','fishmonger','seafood_market','produce_store','department_store','superstore','drugstore','convenience_store','farmers_market') THEN 'Overture新taxonomyによる直接判定'
+    WHEN taxonomy.primary IN ('grocery_store','organic_grocery_store') AND ${supermarket} THEN '新taxonomyとスーパー名称辞書による判定'
+    WHEN taxonomy.primary = 'pharmacy' AND ${drugstore} THEN 'pharmacyをドラッグストア名称辞書で救済'
+    WHEN taxonomy.primary IN ('asian_grocery_store','japanese_grocery_store','international_grocery_store','indian_grocery_store','korean_grocery_store','organic_grocery_store','ethical_grocery_store') THEN '専門食料品taxonomyによる判定'
+    ELSE '根拠不足のため自動分類しない' END`;
 }
 
 function placeSelect(forSimpleFormat: boolean): string {
-  const groupCase = caseExpression(CATEGORY_TO_GROUP, "categories.primary");
+  const groupCase = caseExpression(CATEGORY_TO_GROUP, "taxonomy.primary");
+  const foodCode = foodCodeExpression();
   const websites = forSimpleFormat ? "to_json(websites) AS websites" : "websites";
   const phones = forSimpleFormat ? "to_json(phones) AS phones" : "phones";
   const addresses = forSimpleFormat ? "to_json(addresses) AS addresses" : "addresses";
@@ -55,8 +109,16 @@ function placeSelect(forSimpleFormat: boolean): string {
     id,
     names.primary AS "施設名",
     ${groupCase} AS "生活機能区分",
-    ${foodCaseExpression()} AS "食料品施設区分",
-    categories.primary AS "Overture主要カテゴリー",
+    ${foodCode} AS "食料品アクセス区分コード",
+    ${foodLabelExpression(foodCode)} AS "食料品アクセス区分",
+    ${foodReasonExpression()} AS "分類根拠",
+    CASE WHEN ${dispensingSubfacilityExpression()} THEN true ELSE false END AS "調剤サブ施設フラグ",
+    ${chainCase(DRUGSTORE_CHAINS)} AS "ドラッグストアチェーン",
+    ${chainCase(SUPERMARKET_PATTERNS)} AS "スーパーマーケットチェーン",
+    taxonomy.primary AS "Overture新カテゴリー",
+    basic_category AS "Overture基本カテゴリー",
+    ${forSimpleFormat ? "to_json(taxonomy.hierarchy)" : "taxonomy.hierarchy"} AS "Overture分類階層",
+    categories.primary AS "Overture旧カテゴリー",
     confidence,
     operating_status,
     ${websites},
@@ -86,8 +148,11 @@ export function whereClause(dataset: DatasetType, bbox: BBox, categories: string
   const spatial = `bbox.xmin <= ${bbox.east} AND bbox.xmax >= ${bbox.west} AND bbox.ymin <= ${bbox.north} AND bbox.ymax >= ${bbox.south}`;
   if (dataset === "building") return spatial;
   if (categories.length === 0) throw new Error("POIカテゴリーを1つ以上選択してください。");
-  const field = categoryMode === "all" ? "categories.primary" : "categories.primary";
-  return `${spatial} AND ${field} IN (${categories.map(sqlString).join(",")})`;
+  const selected = categories.map(sqlString).join(",");
+  const taxonomyFilter = categoryMode === "all"
+    ? `taxonomy.primary IN (${selected})`
+    : `list_has_any(taxonomy.hierarchy, [${selected}])`;
+  return `${spatial} AND ${taxonomyFilter}`;
 }
 
 function pathsSql(names: string[]): string {
@@ -175,7 +240,7 @@ export async function exportOverture(request: ExportRequest): Promise<number> {
     onProgress(55, "空間変換機能を準備");
     await connection.query("LOAD spatial");
     const columns = dataset === "place"
-      ? `id, "施設名", "生活機能区分", "食料品施設区分", "Overture主要カテゴリー", confidence, operating_status, websites, phones, addresses`
+      ? `id, "施設名", "生活機能区分", "食料品アクセス区分コード", "食料品アクセス区分", "分類根拠", "調剤サブ施設フラグ", "ドラッグストアチェーン", "スーパーマーケットチェーン", "Overture新カテゴリー", "Overture基本カテゴリー", "Overture分類階層", "Overture旧カテゴリー", confidence, operating_status, websites, phones, addresses`
       : `id, "施設名", subtype, class, height, num_floors, num_floors_underground, min_height, min_floor, has_parts, roof_shape, roof_height`;
     onStatus(`${count.toLocaleString()}件の地物を変換しています…`);
     onProgress(null, `${count.toLocaleString()}件の地物を変換`);
