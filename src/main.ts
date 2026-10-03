@@ -2,6 +2,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./style.css";
 import maplibregl, { type LngLatBoundsLike, type Map as MapLibreMap } from "maplibre-gl";
 import { POI_CATEGORY_GROUPS } from "./categories";
+import { LIFE_FUNCTION_RULES } from "./lifeFunctions";
 import { exportOverture } from "./processor";
 import type { BBox, CategoryMode, DatasetType, OvertureManifest, OutputFormat, PlaceCategory } from "./types";
 import { bboxAreaKm2, matchingItems, parseBBox } from "./utils";
@@ -412,12 +413,28 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function validateConfiguredTaxonomy(currentManifest: OvertureManifest): void {
+  const available = new Set(currentManifest.place_categories.map((category) => category.id));
+  const configured = new Set([
+    ...POI_CATEGORY_GROUPS.flatMap((group) => group.choices.flatMap((choice) => choice.taxonomy)),
+    ...LIFE_FUNCTION_RULES.flatMap((rule) => rule.taxonomy),
+  ]);
+  const missing = [...configured].filter((category) => !available.has(category)).sort();
+  if (missing.length > 0) {
+    throw new Error(`現行Overture taxonomyに存在しない分類設定があります: ${missing.join(", ")}`);
+  }
+}
+
 async function loadManifest(): Promise<void> {
   const response = await fetch("./overture-manifest.json", { cache: "no-cache" });
   if (!response.ok) throw new Error("Overtureマニフェストを読み込めませんでした。");
   manifest = await response.json() as OvertureManifest;
+  validateConfiguredTaxonomy(manifest);
   renderAllCategories();
-  setStatus(`準備完了（Overture ${manifest.release}）`, "success");
+  setStatus(
+    `準備完了（Overture ${manifest.release} / taxonomy ${manifest.taxonomy.schema_version}）`,
+    "success",
+  );
 }
 
 downloadButton.addEventListener("click", async () => {

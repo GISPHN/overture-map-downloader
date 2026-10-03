@@ -40,8 +40,9 @@ async function database(): Promise<duckdb.AsyncDuckDB> {
   return databasePromise;
 }
 
-function hierarchyMatches(categories: string[]): string {
-  return `list_has_any(taxonomy.hierarchy, [${categories.map(sqlString).join(",")}])`;
+function taxonomyMatches(categories: string[]): string {
+  const selected = `[${categories.map(sqlString).join(",")}]`;
+  return `(list_has_any(coalesce(taxonomy.hierarchy, []::VARCHAR[]), ${selected}) OR list_has_any(coalesce(taxonomy.alternates, []::VARCHAR[]), ${selected}))`;
 }
 
 function retailEvidenceExpression(): string {
@@ -101,19 +102,30 @@ function foodCodeExpression(): string {
   const supermarket = knownSupermarketExpression();
   const supermarketCue = supermarketNameCueExpression();
   const freshFoodCue = freshFoodNameCueExpression();
+  const freshTaxonomy = taxonomyMatches(["butcher_shop", "fishmonger", "seafood_market", "produce_store"]);
+  const supermarketTaxonomy = taxonomyMatches(["department_store", "superstore"]);
+  const groceryTaxonomy = taxonomyMatches(["grocery_store"]);
+  const drugstoreTaxonomy = taxonomyMatches(["drugstore"]);
+  const pharmacyTaxonomy = taxonomyMatches(["pharmacy"]);
+  const convenienceTaxonomy = taxonomyMatches(["convenience_store"]);
+  const farmersMarketTaxonomy = taxonomyMatches(["farmers_market"]);
+  const specialistTaxonomy = taxonomyMatches([
+    "asian_grocery_store", "japanese_grocery_store", "international_grocery_store",
+    "indian_grocery_store", "korean_grocery_store", "organic_grocery_store", "ethical_grocery_store",
+  ]);
   return `CASE
     WHEN ${subfacility} THEN 0
-    WHEN taxonomy.primary IN ('butcher_shop','fishmonger','seafood_market','produce_store') THEN 1
-    WHEN taxonomy.primary IN ('department_store','superstore') THEN 2
-    WHEN taxonomy.primary IN ('grocery_store','organic_grocery_store') AND ${supermarket} THEN 2
-    WHEN taxonomy.primary IN ('grocery_store','organic_grocery_store') AND ${supermarketCue} THEN 2
-    WHEN taxonomy.primary IN ('grocery_store','organic_grocery_store') AND ${freshFoodCue} THEN 1
-    WHEN taxonomy.primary = 'drugstore' THEN 3
-    WHEN taxonomy.primary = 'pharmacy' AND ${drugstore} THEN 3
-    WHEN taxonomy.primary = 'convenience_store' THEN 4
-    WHEN taxonomy.primary = 'farmers_market' THEN 5
-    WHEN taxonomy.primary IN ('asian_grocery_store','japanese_grocery_store','international_grocery_store','indian_grocery_store','korean_grocery_store','organic_grocery_store','ethical_grocery_store') THEN 9
-    WHEN taxonomy.primary = 'grocery_store' THEN 9
+    WHEN ${freshTaxonomy} THEN 1
+    WHEN ${supermarketTaxonomy} THEN 2
+    WHEN ${groceryTaxonomy} AND ${supermarket} THEN 2
+    WHEN ${groceryTaxonomy} AND ${supermarketCue} THEN 2
+    WHEN ${groceryTaxonomy} AND ${freshFoodCue} THEN 1
+    WHEN ${drugstoreTaxonomy} THEN 3
+    WHEN ${pharmacyTaxonomy} AND ${drugstore} THEN 3
+    WHEN ${convenienceTaxonomy} THEN 4
+    WHEN ${farmersMarketTaxonomy} THEN 5
+    WHEN ${specialistTaxonomy} THEN 9
+    WHEN ${groceryTaxonomy} THEN 9
     ELSE 0 END`;
 }
 
@@ -135,16 +147,26 @@ function foodReasonExpression(): string {
   const supermarketCue = supermarketNameCueExpression();
   const freshFoodCue = freshFoodNameCueExpression();
   const generalGroceryCue = generalGroceryNameCueExpression();
+  const directTaxonomy = taxonomyMatches([
+    "butcher_shop", "fishmonger", "seafood_market", "produce_store", "department_store", "superstore",
+    "drugstore", "convenience_store", "farmers_market",
+  ]);
+  const groceryTaxonomy = taxonomyMatches(["grocery_store"]);
+  const pharmacyTaxonomy = taxonomyMatches(["pharmacy"]);
+  const specialistTaxonomy = taxonomyMatches([
+    "asian_grocery_store", "japanese_grocery_store", "international_grocery_store",
+    "indian_grocery_store", "korean_grocery_store", "organic_grocery_store", "ethical_grocery_store",
+  ]);
   return `CASE
     WHEN ${subfacility} THEN '調剤サブ施設名のため除外'
-    WHEN taxonomy.primary IN ('butcher_shop','fishmonger','seafood_market','produce_store','department_store','superstore','drugstore','convenience_store','farmers_market') THEN 'Overture新taxonomyによる直接判定'
-    WHEN taxonomy.primary IN ('grocery_store','organic_grocery_store') AND ${supermarket} THEN '名称・ブランド・Webサイトとスーパー辞書による判定'
-    WHEN taxonomy.primary IN ('grocery_store','organic_grocery_store') AND ${supermarketCue} THEN '名称のスーパー業態語による推定'
-    WHEN taxonomy.primary IN ('grocery_store','organic_grocery_store') AND ${freshFoodCue} THEN '名称の青果・鮮魚・食肉語による推定'
-    WHEN taxonomy.primary = 'pharmacy' AND ${drugstore} THEN 'pharmacyをドラッグストア名称辞書で救済'
-    WHEN taxonomy.primary IN ('asian_grocery_store','japanese_grocery_store','international_grocery_store','indian_grocery_store','korean_grocery_store','organic_grocery_store','ethical_grocery_store') THEN '専門食料品taxonomyによる判定'
-    WHEN taxonomy.primary = 'grocery_store' AND ${generalGroceryCue} THEN '一般食料品店を示す名称だが生鮮取扱は未確認'
-    WHEN taxonomy.primary = 'grocery_store' THEN 'grocery_storeだがスーパー・生鮮取扱を確認できないため独立区分'
+    WHEN ${directTaxonomy} THEN 'Overture taxonomy（主分類または代替分類）による直接判定'
+    WHEN ${groceryTaxonomy} AND ${supermarket} THEN '名称・ブランド・Webサイトとスーパー辞書による判定'
+    WHEN ${groceryTaxonomy} AND ${supermarketCue} THEN '名称のスーパー業態語による推定'
+    WHEN ${groceryTaxonomy} AND ${freshFoodCue} THEN '名称の青果・鮮魚・食肉語による推定'
+    WHEN ${pharmacyTaxonomy} AND ${drugstore} THEN 'pharmacyをドラッグストア名称辞書で救済'
+    WHEN ${specialistTaxonomy} THEN '専門食料品taxonomy（主分類または代替分類）による判定'
+    WHEN ${groceryTaxonomy} AND ${generalGroceryCue} THEN '一般食料品店を示す名称だが生鮮取扱は未確認'
+    WHEN ${groceryTaxonomy} THEN 'grocery_storeだがスーパー・生鮮取扱を確認できないため独立区分'
     ELSE '根拠不足のため自動分類しない' END`;
 }
 
@@ -154,36 +176,48 @@ function foodConfidenceExpression(): string {
   const supermarket = knownSupermarketExpression();
   const supermarketCue = supermarketNameCueExpression();
   const freshFoodCue = freshFoodNameCueExpression();
+  const directTaxonomy = taxonomyMatches([
+    "butcher_shop", "fishmonger", "seafood_market", "produce_store", "department_store", "superstore",
+    "drugstore", "convenience_store", "farmers_market",
+  ]);
+  const groceryTaxonomy = taxonomyMatches(["grocery_store"]);
+  const pharmacyTaxonomy = taxonomyMatches(["pharmacy"]);
+  const specialistTaxonomy = taxonomyMatches([
+    "asian_grocery_store", "japanese_grocery_store", "international_grocery_store",
+    "indian_grocery_store", "korean_grocery_store", "organic_grocery_store", "ethical_grocery_store",
+  ]);
   return `CASE
     WHEN ${subfacility} THEN '除外'
-    WHEN taxonomy.primary IN ('butcher_shop','fishmonger','seafood_market','produce_store','department_store','superstore','drugstore','convenience_store','farmers_market') THEN '高'
-    WHEN taxonomy.primary IN ('grocery_store','organic_grocery_store') AND ${supermarket} THEN '高'
-    WHEN taxonomy.primary = 'pharmacy' AND ${drugstore} THEN '中'
-    WHEN taxonomy.primary IN ('grocery_store','organic_grocery_store') AND (${supermarketCue} OR ${freshFoodCue}) THEN '中'
-    WHEN taxonomy.primary IN ('asian_grocery_store','japanese_grocery_store','international_grocery_store','indian_grocery_store','korean_grocery_store','organic_grocery_store','ethical_grocery_store','grocery_store') THEN '低'
+    WHEN ${directTaxonomy} THEN '高'
+    WHEN ${groceryTaxonomy} AND ${supermarket} THEN '高'
+    WHEN ${pharmacyTaxonomy} AND ${drugstore} THEN '中'
+    WHEN ${groceryTaxonomy} AND (${supermarketCue} OR ${freshFoodCue}) THEN '中'
+    WHEN ${specialistTaxonomy} OR ${groceryTaxonomy} THEN '低'
     ELSE '保留' END`;
 }
 
 function foodNameEvidenceExpression(): string {
+  const groceryTaxonomy = taxonomyMatches(["grocery_store"]);
+  const pharmacyTaxonomy = taxonomyMatches(["pharmacy"]);
   return `CASE
-    WHEN taxonomy.primary IN ('grocery_store','organic_grocery_store') AND __supermarket_chain IS NOT NULL THEN __supermarket_chain
-    WHEN taxonomy.primary IN ('grocery_store','organic_grocery_store') AND __supermarket_name_cue IS NOT NULL THEN __supermarket_name_cue
-    WHEN taxonomy.primary IN ('grocery_store','organic_grocery_store') AND __fresh_food_name_cue IS NOT NULL THEN __fresh_food_name_cue
-    WHEN taxonomy.primary = 'pharmacy' AND __drugstore_chain IS NOT NULL THEN __drugstore_chain
-    WHEN taxonomy.primary = 'grocery_store' AND __general_grocery_name_cue IS NOT NULL THEN __general_grocery_name_cue
+    WHEN ${groceryTaxonomy} AND __supermarket_chain IS NOT NULL THEN __supermarket_chain
+    WHEN ${groceryTaxonomy} AND __supermarket_name_cue IS NOT NULL THEN __supermarket_name_cue
+    WHEN ${groceryTaxonomy} AND __fresh_food_name_cue IS NOT NULL THEN __fresh_food_name_cue
+    WHEN ${pharmacyTaxonomy} AND __drugstore_chain IS NOT NULL THEN __drugstore_chain
+    WHEN ${groceryTaxonomy} AND __general_grocery_name_cue IS NOT NULL THEN __general_grocery_name_cue
     ELSE NULL END`;
 }
 
 function foodRelevantExpression(): string {
-  return `(${hierarchyMatches([
+  return `(${taxonomyMatches([
     "butcher_shop", "fishmonger", "seafood_market", "produce_store", "department_store", "superstore",
     "grocery_store", "drugstore", "convenience_store", "farmers_market",
-  ])} OR (taxonomy.primary = 'pharmacy' AND ${knownDrugstoreExpression()}))`;
+  ])} OR (${taxonomyMatches(["pharmacy"])} AND ${knownDrugstoreExpression()}))`;
 }
 
 function lifeRuleCase(field: "group" | "detail" | "code"): string {
   return LIFE_FUNCTION_RULES
-    .map((rule) => `WHEN ${hierarchyMatches(rule.taxonomy)} THEN ${sqlString(rule[field])}`)
+    .map((rule) => `WHEN ${taxonomyMatches(rule.taxonomy)} THEN ${sqlString(rule[field])}`)
     .join(" ");
 }
 
@@ -209,6 +243,7 @@ function placeSelect(forSimpleFormat: boolean): string {
   const websites = forSimpleFormat ? "to_json(websites) AS websites" : "websites";
   const phones = forSimpleFormat ? "to_json(phones) AS phones" : "phones";
   const addresses = forSimpleFormat ? "to_json(addresses) AS addresses" : "addresses";
+  const alternates = forSimpleFormat ? "to_json(taxonomy.alternates)" : "taxonomy.alternates";
   return `
     id,
     names.primary AS "施設名",
@@ -227,6 +262,7 @@ function placeSelect(forSimpleFormat: boolean): string {
     taxonomy.primary AS "Overture新カテゴリー",
     basic_category AS "Overture基本カテゴリー",
     ${forSimpleFormat ? "to_json(taxonomy.hierarchy)" : "taxonomy.hierarchy"} AS "Overture分類階層",
+    ${alternates} AS "Overture代替カテゴリー",
     confidence,
     operating_status,
     ${websites},
@@ -274,8 +310,8 @@ export function whereClause(dataset: DatasetType, bbox: BBox, categories: string
   if (categories.length === 0) throw new Error("POIカテゴリーを1つ以上選択してください。");
   const selected = categories.map(sqlString).join(",");
   const taxonomyFilter = categoryMode === "all"
-    ? `taxonomy.primary IN (${selected})`
-    : `list_has_any(taxonomy.hierarchy, [${selected}])`;
+    ? `(taxonomy.primary IN (${selected}) OR list_has_any(coalesce(taxonomy.alternates, []::VARCHAR[]), [${selected}]))`
+    : taxonomyMatches(categories);
   return `${spatial} AND ${taxonomyFilter}`;
 }
 
@@ -365,7 +401,7 @@ export async function exportOverture(request: ExportRequest): Promise<number> {
     onProgress(55, "空間変換機能を準備");
     await connection.query("LOAD spatial");
     const columns = dataset === "place"
-      ? `id, "施設名", "生活機能区分", "生活機能詳細コード", "生活機能詳細区分", "食料品アクセス区分コード", "食料品アクセス区分", "食料品分類根拠", "食料品分類確度", "食料品名称判定キー", "調剤サブ施設フラグ", "ドラッグストアチェーン", "スーパーマーケットチェーン", "Overtureブランド名", "Overture新カテゴリー", "Overture基本カテゴリー", "Overture分類階層", confidence, operating_status, websites, phones, addresses`
+      ? `id, "施設名", "生活機能区分", "生活機能詳細コード", "生活機能詳細区分", "食料品アクセス区分コード", "食料品アクセス区分", "食料品分類根拠", "食料品分類確度", "食料品名称判定キー", "調剤サブ施設フラグ", "ドラッグストアチェーン", "スーパーマーケットチェーン", "Overtureブランド名", "Overture新カテゴリー", "Overture基本カテゴリー", "Overture分類階層", "Overture代替カテゴリー", confidence, operating_status, websites, phones, addresses`
       : `id, "施設名", subtype, class, height, num_floors, num_floors_underground, min_height, min_floor, has_parts, roof_shape, roof_height`;
     onStatus(`${count.toLocaleString()}件の地物を変換しています…`);
     onProgress(null, `${count.toLocaleString()}件の地物を変換`);

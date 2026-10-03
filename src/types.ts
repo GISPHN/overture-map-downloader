@@ -15,6 +15,12 @@ export type ManifestItem = {
 export type OvertureManifest = {
   generated_at: string;
   release: string;
+  taxonomy: {
+    release: string;
+    schema_version: string;
+    source_url: string;
+    categories: number;
+  };
   place_categories: PlaceCategory[];
   datasets: {
     place: ManifestItem[];

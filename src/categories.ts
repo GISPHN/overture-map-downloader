@@ -12,7 +12,7 @@ export type CategoryGroup = {
 };
 
 // 画面では目的別の分かりやすい選択肢を示し、内部では新taxonomyの
-// primaryまたはhierarchyに含まれるカテゴリーをまとめて検索する。
+// primary、hierarchy、alternatesに含まれるカテゴリーをまとめて検索する。
 export const POI_CATEGORY_GROUPS: CategoryGroup[] = [
   {
     id: "food_daily",
@@ -32,7 +32,7 @@ export const POI_CATEGORY_GROUPS: CategoryGroup[] = [
     description: "病院、診療所、歯科、救急、専門医療、薬局",
     choices: [
       { id: "hospital", label: "病院", taxonomy: ["hospital"] },
-      { id: "outpatient", label: "診療所・外来医療", taxonomy: ["doctor", "medical_center", "outpatient_care_facility"] },
+      { id: "outpatient", label: "診療所・外来医療", taxonomy: ["outpatient_care_facility"] },
       { id: "dental", label: "歯科診療所", taxonomy: ["dental_clinic"] },
       { id: "emergency", label: "救急医療", taxonomy: ["emergency_or_urgent_care_facility"] },
       { id: "specialized", label: "専門医療施設", taxonomy: ["specialized_medical_facility"] },
@@ -48,7 +48,7 @@ export const POI_CATEGORY_GROUPS: CategoryGroup[] = [
       { id: "senior_living", label: "高齢者居住・介護施設", taxonomy: ["senior_living_facility"] },
       { id: "senior_service", label: "高齢者生活支援", taxonomy: ["senior_citizen_service"] },
       { id: "disability", label: "障害福祉", taxonomy: ["disability_services_and_support_organization"] },
-      { id: "community_center", label: "地域交流施設・児童館", taxonomy: ["community_center", "children_hall"] },
+      { id: "community_center", label: "地域交流施設", taxonomy: ["community_center"] },
       { id: "social_service", label: "社会福祉・地域支援", taxonomy: ["social_or_community_service"] },
     ],
   },

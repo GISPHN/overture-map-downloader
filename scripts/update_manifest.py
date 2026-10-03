@@ -4,12 +4,11 @@
 from __future__ import annotations
 
 import concurrent.futures
-import csv
 import datetime as dt
-import io
 import json
 from pathlib import Path
 import random
+import re
 import subprocess
 import time
 from urllib.parse import urljoin
@@ -21,7 +20,7 @@ TARGETS = {
     "building": ("buildings", "building"),
 }
 OUTPUT = Path(__file__).resolve().parents[1] / "public" / "overture-manifest.json"
-CATEGORIES_URL = "https://docs.google.com/spreadsheets/d/1_i2S48zTDoHff0uX-d8Nes3bR-Xee8drx27Gyi80CQ0/gviz/tq?tqx=out:csv"
+CANONICAL_TAXONOMY_ROOT = "https://docs.overturemaps.org/taxonomy"
 
 
 def load_text(url: str) -> str:
@@ -63,17 +62,51 @@ def load_json(url: str) -> dict:
     return json.loads(load_text(url))
 
 
-def place_categories() -> list[dict]:
-    rows = csv.DictReader(io.StringIO(load_text(CATEGORIES_URL).lstrip("\ufeff")))
-    categories = []
-    for row in rows:
-        category_id = (row.get("New Primary Category") or "").strip()
-        hierarchy = (row.get("New Primary Hierarchy") or "").strip()
-        if not category_id or not hierarchy or (row.get("PC Removed") or "").strip().upper() == "TRUE":
-            continue
-        path = [part.strip() for part in hierarchy.split(">") if part.strip()]
-        categories.append({"id": category_id, "path": path})
-    return sorted({category["id"]: category for category in categories}.values(), key=lambda category: category["id"])
+def canonical_taxonomy_release(data_release: str) -> str:
+    """Map a patched data release to the canonical taxonomy release for that month."""
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}\.\d+", data_release):
+        raise RuntimeError(f"Unexpected Overture release identifier: {data_release}")
+    return f"{data_release.rsplit('.', 1)[0]}.0"
+
+
+def place_categories(data_release: str) -> tuple[list[dict], dict]:
+    taxonomy_release = canonical_taxonomy_release(data_release)
+    source_url = f"{CANONICAL_TAXONOMY_ROOT}/{taxonomy_release}/taxonomy.json"
+    taxonomy = load_json(source_url)
+    if taxonomy.get("version") != taxonomy_release:
+        raise RuntimeError(
+            f"Canonical taxonomy version mismatch: expected {taxonomy_release}, got {taxonomy.get('version')}"
+        )
+
+    categories: list[dict] = []
+    seen: set[str] = set()
+
+    def visit(nodes: list[dict], parent_path: list[str]) -> None:
+        for node in nodes:
+            category_id = node.get("name")
+            if not isinstance(category_id, str) or not category_id:
+                raise RuntimeError("Canonical taxonomy contains a category without a valid name")
+            if category_id in seen:
+                raise RuntimeError(f"Duplicate category in canonical taxonomy: {category_id}")
+            seen.add(category_id)
+            path = [*parent_path, category_id]
+            categories.append({"id": category_id, "path": path})
+            visit(node.get("children") or [], path)
+
+    visit(taxonomy.get("tree") or [], [])
+    expected_count = int(taxonomy.get("stats", {}).get("categories", 0))
+    if expected_count <= 0 or len(categories) != expected_count:
+        raise RuntimeError(
+            f"Canonical taxonomy count mismatch: expected {expected_count}, extracted {len(categories)}"
+        )
+
+    metadata = {
+        "release": taxonomy_release,
+        "schema_version": taxonomy.get("schemaVersion"),
+        "source_url": source_url,
+        "categories": len(categories),
+    }
+    return sorted(categories, key=lambda category: category["id"]), metadata
 
 
 def child_url(catalog: dict, base_url: str, title: str) -> str:
@@ -108,6 +141,7 @@ def dataset_items(release: str, theme: str, data_type: str) -> list[dict]:
 def main() -> None:
     root = load_json(ROOT)
     release = root["latest"]
+    categories, taxonomy = place_categories(release)
     datasets = {
         name: dataset_items(release, theme, data_type)
         for name, (theme, data_type) in TARGETS.items()
@@ -115,12 +149,14 @@ def main() -> None:
     manifest = {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "release": release,
-        "place_categories": place_categories(),
+        "taxonomy": taxonomy,
+        "place_categories": categories,
         "datasets": datasets,
     }
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(manifest, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"Wrote {OUTPUT} for release {release}")
+    print(f"  taxonomy: {taxonomy['release']} / {taxonomy['schema_version']} / {taxonomy['categories']} categories")
     for name, records in datasets.items():
         print(f"  {name}: {len(records)} files")
 
