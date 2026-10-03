@@ -6,3 +6,4 @@ dist/
 __pycache__/
 *.pyc
 *.tsbuildinfo
+public/overture-manifest.json
