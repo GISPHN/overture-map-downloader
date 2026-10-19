@@ -45,6 +45,12 @@ function taxonomyMatches(categories: string[]): string {
   return `(list_has_any(coalesce(taxonomy.hierarchy, []::VARCHAR[]), ${selected}) OR list_has_any(coalesce(taxonomy.alternates, []::VARCHAR[]), ${selected}))`;
 }
 
+// Alternates are search aliases, not evidence that a pharmacy is a drugstore:
+// every pharmacy in the September 2026 Japanese sample has alternate=drugstore.
+function primaryTaxonomyMatches(categories: string[]): string {
+  return `list_has_any(coalesce(taxonomy.hierarchy, []::VARCHAR[]), [${categories.map(sqlString).join(",")}])`;
+}
+
 function retailEvidenceExpression(): string {
   const fullWidth = "０１２３４５６７８９ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ";
   const halfWidth = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -52,15 +58,14 @@ function retailEvidenceExpression(): string {
     coalesce(names.primary, ''),
     coalesce(brand.names.primary, ''),
     coalesce(cast(to_json(names.common) AS VARCHAR), ''),
-    coalesce(cast(to_json(brand.names.common) AS VARCHAR), ''),
-    coalesce(array_to_string(websites, ' '), '')
+    coalesce(cast(to_json(brand.names.common) AS VARCHAR), '')
   )), ${sqlString(fullWidth)}, ${sqlString(halfWidth)}),
-  '[[:space:]　・･·._‐‑–—―ー－/／&＆()（）\\[\\]「」『』【】''’]+', '', 'g')`;
+  '[[:space:]　・･·._‐‑–—―－/／&＆()（）\\[\\]「」『』【】''’]+', '', 'g')`;
 }
 
-function nameMatches(patterns: string[]): string {
+function nameMatches(patterns: string[], column = "__name_key"): string {
   const normalized = [...new Set(patterns.map(normalizeRetailText).filter(Boolean))];
-  return `(${normalized.map((pattern) => `__name_key LIKE ${sqlString(`%${pattern}%`)}`).join(" OR ")})`;
+  return `(${normalized.map((pattern) => `${column} LIKE ${sqlString(`%${pattern}%`)}`).join(" OR ")})`;
 }
 
 function chainCase(entries: { brand: string; patterns: string[] }[]): string {
@@ -77,7 +82,7 @@ function dispensingSubfacilityExpression(): string {
 }
 
 function knownDrugstoreExpression(): string {
-  return "(__drugstore_chain IS NOT NULL)";
+  return "(__drugstore_chain IS NOT NULL AND NOT __is_pharmacy_only)";
 }
 
 function knownSupermarketExpression(): string {
@@ -102,14 +107,14 @@ function foodCodeExpression(): string {
   const supermarket = knownSupermarketExpression();
   const supermarketCue = supermarketNameCueExpression();
   const freshFoodCue = freshFoodNameCueExpression();
-  const freshTaxonomy = taxonomyMatches(["butcher_shop", "fishmonger", "seafood_market", "produce_store"]);
-  const supermarketTaxonomy = taxonomyMatches(["department_store", "superstore"]);
-  const groceryTaxonomy = taxonomyMatches(["grocery_store"]);
-  const drugstoreTaxonomy = taxonomyMatches(["drugstore"]);
-  const pharmacyTaxonomy = taxonomyMatches(["pharmacy"]);
-  const convenienceTaxonomy = taxonomyMatches(["convenience_store"]);
-  const farmersMarketTaxonomy = taxonomyMatches(["farmers_market"]);
-  const specialistTaxonomy = taxonomyMatches([
+  const freshTaxonomy = primaryTaxonomyMatches(["butcher_shop", "fishmonger", "seafood_market", "produce_store"]);
+  const supermarketTaxonomy = primaryTaxonomyMatches(["department_store", "superstore"]);
+  const groceryTaxonomy = primaryTaxonomyMatches(["grocery_store"]);
+  const drugstoreTaxonomy = primaryTaxonomyMatches(["drugstore"]);
+  const pharmacyTaxonomy = primaryTaxonomyMatches(["pharmacy"]);
+  const convenienceTaxonomy = primaryTaxonomyMatches(["convenience_store"]);
+  const farmersMarketTaxonomy = primaryTaxonomyMatches(["farmers_market"]);
+  const specialistTaxonomy = primaryTaxonomyMatches([
     "asian_grocery_store", "japanese_grocery_store", "international_grocery_store",
     "indian_grocery_store", "korean_grocery_store", "organic_grocery_store", "ethical_grocery_store",
   ]);
@@ -147,13 +152,13 @@ function foodReasonExpression(): string {
   const supermarketCue = supermarketNameCueExpression();
   const freshFoodCue = freshFoodNameCueExpression();
   const generalGroceryCue = generalGroceryNameCueExpression();
-  const directTaxonomy = taxonomyMatches([
+  const directTaxonomy = primaryTaxonomyMatches([
     "butcher_shop", "fishmonger", "seafood_market", "produce_store", "department_store", "superstore",
     "drugstore", "convenience_store", "farmers_market",
   ]);
-  const groceryTaxonomy = taxonomyMatches(["grocery_store"]);
-  const pharmacyTaxonomy = taxonomyMatches(["pharmacy"]);
-  const specialistTaxonomy = taxonomyMatches([
+  const groceryTaxonomy = primaryTaxonomyMatches(["grocery_store"]);
+  const pharmacyTaxonomy = primaryTaxonomyMatches(["pharmacy"]);
+  const specialistTaxonomy = primaryTaxonomyMatches([
     "asian_grocery_store", "japanese_grocery_store", "international_grocery_store",
     "indian_grocery_store", "korean_grocery_store", "organic_grocery_store", "ethical_grocery_store",
   ]);
@@ -176,13 +181,13 @@ function foodConfidenceExpression(): string {
   const supermarket = knownSupermarketExpression();
   const supermarketCue = supermarketNameCueExpression();
   const freshFoodCue = freshFoodNameCueExpression();
-  const directTaxonomy = taxonomyMatches([
+  const directTaxonomy = primaryTaxonomyMatches([
     "butcher_shop", "fishmonger", "seafood_market", "produce_store", "department_store", "superstore",
     "drugstore", "convenience_store", "farmers_market",
   ]);
-  const groceryTaxonomy = taxonomyMatches(["grocery_store"]);
-  const pharmacyTaxonomy = taxonomyMatches(["pharmacy"]);
-  const specialistTaxonomy = taxonomyMatches([
+  const groceryTaxonomy = primaryTaxonomyMatches(["grocery_store"]);
+  const pharmacyTaxonomy = primaryTaxonomyMatches(["pharmacy"]);
+  const specialistTaxonomy = primaryTaxonomyMatches([
     "asian_grocery_store", "japanese_grocery_store", "international_grocery_store",
     "indian_grocery_store", "korean_grocery_store", "organic_grocery_store", "ethical_grocery_store",
   ]);
@@ -197,8 +202,8 @@ function foodConfidenceExpression(): string {
 }
 
 function foodNameEvidenceExpression(): string {
-  const groceryTaxonomy = taxonomyMatches(["grocery_store"]);
-  const pharmacyTaxonomy = taxonomyMatches(["pharmacy"]);
+  const groceryTaxonomy = primaryTaxonomyMatches(["grocery_store"]);
+  const pharmacyTaxonomy = primaryTaxonomyMatches(["pharmacy"]);
   return `CASE
     WHEN ${groceryTaxonomy} AND __supermarket_chain IS NOT NULL THEN __supermarket_chain
     WHEN ${groceryTaxonomy} AND __supermarket_name_cue IS NOT NULL THEN __supermarket_name_cue
@@ -209,7 +214,7 @@ function foodNameEvidenceExpression(): string {
 }
 
 function foodRelevantExpression(): string {
-  return `(${taxonomyMatches([
+  return `(${primaryTaxonomyMatches([
     "butcher_shop", "fishmonger", "seafood_market", "produce_store", "department_store", "superstore",
     "grocery_store", "drugstore", "convenience_store", "farmers_market",
   ])} OR (${taxonomyMatches(["pharmacy"])} AND ${knownDrugstoreExpression()}))`;
@@ -271,10 +276,13 @@ function placeSelect(forSimpleFormat: boolean): string {
     geometry`;
 }
 
-function placeQuery(source: string, where: string, forSimpleFormat: boolean): string {
-  const named = `SELECT *, ${retailEvidenceExpression()} AS __name_key FROM ${source} WHERE ${where}`;
+export function placeQuery(source: string, where: string, forSimpleFormat: boolean): string {
+  const named = `SELECT *, ${retailEvidenceExpression()} AS __name_key,
+    regexp_replace(lower(coalesce(names.primary, '')), '[[:space:]　・･·._‐‑–—―－/／&＆()（）\\[\\]「」『』【】''’]+', '', 'g') AS __primary_name_key
+    FROM ${source} WHERE ${where}`;
   const classified = `SELECT *,
     ${nameMatches(DISPENSING_SUBFACILITY_PATTERNS)} AS __is_dispensing_subfacility,
+    ${nameMatches(["薬局", "調剤", "処方せん", "処方箋"], "__primary_name_key")} AS __is_pharmacy_only,
     ${chainCase(DRUGSTORE_CHAINS)} AS __drugstore_chain,
     ${chainCase(SUPERMARKET_PATTERNS)} AS __supermarket_chain,
     CASE

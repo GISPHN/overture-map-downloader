@@ -81,7 +81,7 @@ export const SUPERMARKET_PATTERNS: { brand: string; patterns: string[] }[] = [
   { brand: "イオンスタイル", patterns: ["イオンスタイル"] },
   { brand: "マックスバリュ", patterns: ["マックスバリュ", "maxvalu"] },
   { brand: "ザ・ビッグ", patterns: ["ザ・ビッグ", "ザビッグ", "the big"] },
-  { brand: "ダイエー", patterns: ["ダイエー", "daiei"] },
+  { brand: "ダイエー", patterns: ["ダイエー", "daiei", "codeli", "こデリ", "foodium"] },
   { brand: "グルメシティ", patterns: ["グルメシティ"] },
   { brand: "KOHYO", patterns: ["kohyo", "コーヨー"] },
   { brand: "イトーヨーカドー", patterns: ["イトーヨーカドー", "ito yokado"] },
@@ -103,7 +103,7 @@ export const SUPERMARKET_PATTERNS: { brand: string; patterns: string[] }[] = [
   { brand: "紀ノ国屋", patterns: ["紀ノ国屋", "kinokuniya"] },
   { brand: "ビオセボン", patterns: ["ビオセボン", "bio c' bon", "bio c’ bon"] },
   { brand: "アピタ・ピアゴ", patterns: ["アピタ", "ピアゴ"] },
-  { brand: "バロー", patterns: ["スーパーマーケットバロー", "valor"] },
+  { brand: "バロー", patterns: ["スーパーマーケットバロー", "バロー", "valor"] },
   { brand: "平和堂", patterns: ["平和堂", "フレンドマート", "アル・プラザ"] },
   { brand: "オークワ", patterns: ["オークワ", "プライスカット"] },
   { brand: "万代", patterns: ["スーパー万代", "万代", "mandai"] },
@@ -135,6 +135,12 @@ export const SUPERMARKET_PATTERNS: { brand: string; patterns: string[] }[] = [
   { brand: "おーばん", patterns: ["おーばん"] },
   { brand: "ヨークベニマル", patterns: ["ヨークベニマル"] },
   { brand: "リオン・ドール", patterns: ["リオン・ドール", "リオンドール"] },
+  // 2026-09-23.1 の札幌・遠野・仙台サンプルで確認した屋号。
+  { brand: "北海市場", patterns: ["北海市場"] },
+  { brand: "キクコーストア", patterns: ["キクコーストア"] },
+  { brand: "ウジエスーパー", patterns: ["ウジエスーパー"] },
+  { brand: "つかさ屋", patterns: ["つかさ屋"] },
+  { brand: "みやぎ生協", patterns: ["みやぎ生協", "みやぎ生活協同組合"] },
 
   // 関東
   { brand: "カスミ", patterns: ["フードスクエアカスミ", "フードマーケットカスミ", "カスミ"] },
@@ -155,7 +161,9 @@ export const SUPERMARKET_PATTERNS: { brand: string; patterns: string[] }[] = [
   { brand: "アコレ", patterns: ["アコレ"] },
   { brand: "Olympic", patterns: ["olympicおりーぶ", "オリンピック"] },
   { brand: "コモディイイダ", patterns: ["コモディイイダ"] },
-  { brand: "三徳", patterns: ["スーパー三徳", "santoku"] },
+  { brand: "三徳", patterns: ["スーパー三徳", "三徳", "santoku"] },
+  { brand: "三浦屋", patterns: ["三浦屋", "miuraya"] },
+  { brand: "ピーコックストア", patterns: ["ピーコックストア", "peacock store"] },
   { brand: "よしや", patterns: ["よしやsainE", "よしやセーヌ"] },
   { brand: "文化堂", patterns: ["スーパー文化堂", "文化堂"] },
   { brand: "スーパーアルプス", patterns: ["スーパーアルプス"] },
@@ -168,7 +176,9 @@ export const SUPERMARKET_PATTERNS: { brand: string; patterns: string[] }[] = [
   { brand: "富士シティオ", patterns: ["fujiスーパー", "デリド"] },
   { brand: "ヤオマサ", patterns: ["ヤオマサ"] },
   { brand: "たまや", patterns: ["スーパーたまや"] },
-  { brand: "エイビイ", patterns: ["エイビイ", "ave"] },
+  { brand: "エイビイ", patterns: ["エイビイ"] },
+  { brand: "ワイズマート", patterns: ["ワイズマート", "wise mart"] },
+  { brand: "リコス", patterns: ["リコス", "ricos"] },
 
   // 北陸・甲信越・東海
   { brand: "原信・ナルス", patterns: ["原信", "ナルス"] },
@@ -193,6 +203,9 @@ export const SUPERMARKET_PATTERNS: { brand: string; patterns: string[] }[] = [
   { brand: "フィール", patterns: ["フィールeqvo", "フィール food mesa", "フィール"] },
   { brand: "アオキスーパー", patterns: ["アオキスーパー"] },
   { brand: "サンヨネ", patterns: ["サンヨネ"] },
+  { brand: "タチヤ", patterns: ["タチヤ", "tachiya"] },
+  { brand: "ヤオヒコ", patterns: ["ヤオヒコ"] },
+  { brand: "ファミリーストアさとう", patterns: ["ファミリーストアさとう"] },
   { brand: "ドミー", patterns: ["ドミー"] },
   { brand: "ぎゅーとら", patterns: ["ぎゅーとら"] },
   { brand: "スーパーサンシ", patterns: ["スーパーサンシ"] },
@@ -207,6 +220,7 @@ export const SUPERMARKET_PATTERNS: { brand: string; patterns: string[] }[] = [
   { brand: "コノミヤ", patterns: ["コノミヤ", "スーパーおくやま"] },
   { brand: "サンディ", patterns: ["サンディ"] },
   { brand: "スーパー玉出", patterns: ["スーパー玉出"] },
+  { brand: "スーパーサンコー", patterns: ["スーパーサンコー"] },
   { brand: "近商ストア", patterns: ["近商ストア", "harves"] },
   { brand: "パントリー・ラッキー", patterns: ["パントリー", "スーパーマーケットラッキー"] },
   { brand: "マルヤス", patterns: ["スーパーマルヤス", "マルヤス"] },
@@ -228,6 +242,8 @@ export const SUPERMARKET_PATTERNS: { brand: string; patterns: string[] }[] = [
   { brand: "わたなべ生鮮館", patterns: ["わたなべ生鮮館"] },
   { brand: "エブリイ", patterns: ["業務スーパーエブリイ", "生鮮壱番館エブリイ"] },
   { brand: "フレスタ", patterns: ["フレスタ"] },
+  { brand: "ピュアークック", patterns: ["ピュアークック"] },
+  { brand: "ユアーズ", patterns: ["ユアーズ"] },
   { brand: "藤三", patterns: ["藤三"] },
   { brand: "アルク・丸久", patterns: ["アルク", "丸久", "マルキュウ"] },
   { brand: "丸合", patterns: ["まるごう", "丸合"] },
@@ -242,10 +258,12 @@ export const SUPERMARKET_PATTERNS: { brand: string; patterns: string[] }[] = [
 
   // 九州・沖縄
   { brand: "サンリブ・マルショク", patterns: ["サンリブ", "マルショク"] },
+  { brand: "フードウェイ", patterns: ["フードウェイ"] },
+  { brand: "フードプラザにしだ", patterns: ["フードプラザにしだ", "フレッシュにしだ"] },
   { brand: "マルキョウ", patterns: ["マルキョウ"] },
-  { brand: "西鉄ストア", patterns: ["にしてつストア", "レガネット"] },
+  { brand: "西鉄ストア", patterns: ["にしてつストア", "西鉄ストア", "レガネット"] },
   { brand: "ハローデイ", patterns: ["ハローデイ", "ボンラパス"] },
-  { brand: "サニー", patterns: ["サニー"] },
+  { brand: "サニー", patterns: ["サニー", "sunny"] },
   { brand: "マミーズ", patterns: ["マミーズ", "ラ・ムー羽山台"] },
   { brand: "ダイキョーバリュー", patterns: ["ダイキョーバリュー"] },
   { brand: "ルミエール", patterns: ["ルミエール"] },
@@ -263,6 +281,7 @@ export const SUPERMARKET_PATTERNS: { brand: string; patterns: string[] }[] = [
   { brand: "A-Z", patterns: ["a-zスーパーセンター", "a-z"] },
   { brand: "サンエー", patterns: ["サンエー"] },
   { brand: "かねひで", patterns: ["タウンプラザかねひで", "かねひで"] },
+  { brand: "フレッシュプラザユニオン", patterns: ["フレッシュプラザユニオン", "ユニオンスカラ", "ユニオン前島", "ユニオン古島", "ユニオン経塚"] },
   { brand: "リウボウストア", patterns: ["リウボウストア"] },
   { brand: "丸大", patterns: ["丸大"] },
 ];
@@ -271,6 +290,8 @@ export const SUPERMARKET_PATTERNS: { brand: string; patterns: string[] }[] = [
 // 2023年改定の日本標準産業分類5811にある「食料品スーパー」の名称上の代理指標。
 export const SUPERMARKET_NAME_CUES: { brand: string; patterns: string[] }[] = [
   { brand: "スーパー明示", patterns: ["スーパーマーケット", "食品スーパー", "生鮮スーパー", "supermarket"] },
+  // primary=grocery_store の場合に限り、地域店名の「スーパー」を中程度の根拠とする。
+  { brand: "スーパー屋号", patterns: ["スーパー"] },
   { brand: "食品売場明示", patterns: ["食品館", "食彩館", "生鮮館", "食品市場"] },
   { brand: "食品マーケット明示", patterns: ["フードマーケット", "フーズマーケット", "food market", "foods market"] },
   { brand: "総合量販店明示", patterns: ["スーパーセンター", "ハイパーマーケット", "hypermarket"] },
@@ -290,6 +311,7 @@ export const GENERAL_GROCERY_NAME_CUES: { brand: string; patterns: string[] }[] 
 export const SUPERMARKET_FALSE_POSITIVES = [
   "スーパーホテル", "スーパー銭湯", "スーパーオートバックス", "スーパードラッグ",
   "スーパースポーツ", "スーパービバホーム", "スーパーセカンドストリート",
+  "スーパーフライ",
 ];
 
 export const DISPENSING_SUBFACILITY_PATTERNS = [
@@ -300,7 +322,8 @@ export function normalizeRetailText(value: string): string {
   return value
     .normalize("NFKC")
     .toLocaleLowerCase("ja-JP")
-    .replace(/[\s　・･·._‐‑–—―ー－/／&＆()（）\[\]「」『』【】'’]+/g, "");
+    // 長音符「ー」は文字であり、削ると「スーパー」が「スパイス」に誤一致する。
+    .replace(/[\s　・･·._‐‑–—―－/／&＆()（）\[\]「」『』【】'’]+/g, "");
 }
 
 export function findPattern(name: string | null | undefined, entries: { brand: string; patterns: string[] }[]): string | null {

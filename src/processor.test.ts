@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { whereClause } from "./processor";
+import { placeQuery, whereClause } from "./processor";
 
 const bbox = { west: 139.6, south: 35.6, east: 139.8, north: 35.8 };
 
@@ -23,5 +23,20 @@ describe("Overture taxonomy v2 filtering", () => {
     const sql = whereClause("building", bbox, [], "recommended");
 
     expect(sql).not.toContain("taxonomy");
+  });
+
+  it("食品分類は主分類を優先し、薬局の代替drugstoreを直接判定に使わない", () => {
+    const sql = placeQuery("places", "true", false);
+    expect(sql).toContain("coalesce(taxonomy.hierarchy, []::VARCHAR[]), ['drugstore']");
+    expect(sql).not.toContain("coalesce(taxonomy.alternates, []::VARCHAR[]), ['drugstore']");
+    expect(sql).toContain("__drugstore_chain IS NOT NULL AND NOT __is_pharmacy_only");
+    expect(sql).toContain("__primary_name_key");
+  });
+
+  it("URL中の偶然一致をスーパーの名称判定に使わない", () => {
+    const sql = placeQuery("places", "true", false);
+    const nameEvidence = sql.match(/SELECT \*, ([\s\S]+?) AS __name_key/)?.[1];
+    expect(nameEvidence).toBeDefined();
+    expect(nameEvidence).not.toContain("websites");
   });
 });
