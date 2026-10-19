@@ -12,13 +12,13 @@ export const LIFE_FUNCTION_RULES: LifeFunctionRule[] = [
   { code: "2-04", group: "医療・服薬支援", detail: "救急医療", taxonomy: ["emergency_or_urgent_care_facility"] },
   { code: "2-01", group: "医療・服薬支援", detail: "病院", taxonomy: ["hospital"] },
   { code: "2-05", group: "医療・服薬支援", detail: "専門医療施設", taxonomy: ["specialized_medical_facility"] },
-  { code: "2-02", group: "医療・服薬支援", detail: "診療所・外来医療", taxonomy: ["doctor", "medical_center", "outpatient_care_facility"] },
+  { code: "2-02", group: "医療・服薬支援", detail: "診療所・外来医療", taxonomy: ["outpatient_care_facility"] },
   { code: "2-06", group: "医療・服薬支援", detail: "調剤薬局", taxonomy: ["pharmacy"] },
 
   { code: "3-01", group: "高齢者福祉・地域支援", detail: "高齢者居住・介護施設", taxonomy: ["senior_living_facility"] },
   { code: "3-02", group: "高齢者福祉・地域支援", detail: "高齢者生活支援", taxonomy: ["senior_citizen_service"] },
   { code: "3-03", group: "高齢者福祉・地域支援", detail: "障害福祉", taxonomy: ["disability_services_and_support_organization"] },
-  { code: "3-04", group: "高齢者福祉・地域支援", detail: "地域交流施設・児童館", taxonomy: ["community_center", "children_hall"] },
+  { code: "3-04", group: "高齢者福祉・地域支援", detail: "地域交流施設", taxonomy: ["community_center"] },
   { code: "3-05", group: "高齢者福祉・地域支援", detail: "社会福祉・地域支援", taxonomy: ["social_or_community_service"] },
 
   { code: "4-01", group: "金融・郵便・行政サービス", detail: "ATM", taxonomy: ["atm"] },
@@ -45,6 +45,7 @@ export const LIFE_FUNCTION_RULES: LifeFunctionRule[] = [
   { code: "7-05", group: "その他の日常生活サービス", detail: "食品配達サービス", taxonomy: ["food_delivery_service"] },
 ];
 
-export function lifeFunctionForHierarchy(hierarchy: string[]): LifeFunctionRule | null {
-  return LIFE_FUNCTION_RULES.find((rule) => rule.taxonomy.some((category) => hierarchy.includes(category))) ?? null;
+export function lifeFunctionForHierarchy(hierarchy: string[], alternates: string[] = []): LifeFunctionRule | null {
+  const categories = new Set([...hierarchy, ...alternates]);
+  return LIFE_FUNCTION_RULES.find((rule) => rule.taxonomy.some((category) => categories.has(category))) ?? null;
 }

@@ -21,4 +21,12 @@ describe("生活機能詳細区分", () => {
   it("対象外はnullとする", () => {
     expect(lifeFunctionForHierarchy(["food_and_drink", "restaurant"])).toBeNull();
   });
+
+  it("主階層にない代替分類も生活機能として判定する", () => {
+    const result = lifeFunctionForHierarchy(
+      ["shopping", "food_and_beverage_store", "grocery_store"],
+      ["atm"],
+    );
+    expect(result?.detail).toBe("ATM");
+  });
 });
