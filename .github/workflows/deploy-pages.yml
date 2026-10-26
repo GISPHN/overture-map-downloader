@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "20 3 * * *"
+    # Overture publishes its monthly release around the third Wednesday.
+    - cron: "20 3 25 * *"
   workflow_dispatch:
 
 permissions:
